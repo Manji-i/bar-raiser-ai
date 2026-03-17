@@ -5,6 +5,7 @@ import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { reportService } from './services/reportService.js';
 
 dotenv.config({ path: '.env.local' }); // Load from .env.local for local dev, or environment variables in production
 
@@ -115,10 +116,12 @@ if (AI_PROVIDER === 'gemini') {
     }
 }
 
-// API Route
+// API Routes
+
+// Analyze Interview
 app.post('/api/analyze', async (req, res) => {
   try {
-    const { transcript, jobTitle, competencies } = req.body;
+    const { transcript, jobTitle, competencies, fileName } = req.body; // Added fileName
 
     if (!transcript || !jobTitle || !competencies) {
       return res.status(400).json({ error: 'Missing required fields: transcript, jobTitle, competencies' });
@@ -167,7 +170,15 @@ Please analyze the transcript based on the Job Title and Competency Model provid
     }
 
     if (resultText) {
-      res.json({ result: resultText });
+      // Auto-save report
+      const report = reportService.create({
+        jobTitle,
+        competencies,
+        fileName: fileName || 'Unknown File',
+        result: resultText
+      });
+
+      res.json({ result: resultText, reportId: report.id });
     } else {
       throw new Error("No text response received from AI service.");
     }
@@ -175,6 +186,31 @@ Please analyze the transcript based on the Job Title and Competency Model provid
   } catch (error) {
     console.error("AI Analysis Error:", error);
     res.status(500).json({ error: error.message || "An error occurred during analysis." });
+  }
+});
+
+// Reports Endpoints
+app.get('/api/reports', (req, res) => {
+  const reports = reportService.getAll();
+  // Return summary list (exclude heavy result content if list is long, but for now full is fine)
+  res.json(reports);
+});
+
+app.get('/api/reports/:id', (req, res) => {
+  const report = reportService.getById(req.params.id);
+  if (report) {
+    res.json(report);
+  } else {
+    res.status(404).json({ error: "Report not found" });
+  }
+});
+
+app.delete('/api/reports/:id', (req, res) => {
+  const success = reportService.delete(req.params.id);
+  if (success) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: "Report not found" });
   }
 });
 

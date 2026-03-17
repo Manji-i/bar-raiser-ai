@@ -1,22 +1,68 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Download, RefreshCw, CheckCircle2, FileDown } from 'lucide-react';
-import { AnalysisState } from '../types';
+import { Download, RefreshCw, CheckCircle2, FileDown, Share2, Trash2 } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { AnalysisState, Report } from '../types';
 
 // Declare html2pdf for TypeScript since it's loaded via CDN
 declare var html2pdf: any;
 
 interface ReportViewProps {
-  analysis: AnalysisState;
-  onReset: () => void;
+  analysis?: AnalysisState;
+  onReset?: () => void;
 }
 
-const ReportView: React.FC<ReportViewProps> = ({ analysis, onReset }) => {
+const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onReset }) => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const contentRef = useRef<HTMLDivElement>(null);
+  
+  const [analysis, setAnalysis] = useState<AnalysisState | null>(initialAnalysis || null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isLoading, setIsLoading] = useState(!initialAnalysis);
+  const [copyingLink, setCopyingLink] = useState(false);
+
+  useEffect(() => {
+    // If accessing via URL ID and no initial analysis provided, fetch it
+    if (id && !initialAnalysis) {
+      const fetchReport = async () => {
+        try {
+          const res = await fetch(`/api/reports/${id}`);
+          if (res.ok) {
+            const report: Report = await res.json();
+            setAnalysis({
+              status: 'COMPLETE' as any,
+              result: report.result,
+              error: null,
+              fileName: report.fileName,
+              reportId: report.id
+            });
+          } else {
+            setAnalysis({
+              status: 'ERROR' as any,
+              result: null,
+              error: "Report not found",
+              fileName: null
+            });
+          }
+        } catch (e) {
+          console.error(e);
+          setAnalysis({
+            status: 'ERROR' as any,
+            result: null,
+            error: "Failed to load report",
+            fileName: null
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchReport();
+    }
+  }, [id, initialAnalysis]);
 
   const handleDownloadMd = () => {
-    if (!analysis.result) return;
+    if (!analysis?.result) return;
     const blob = new Blob([analysis.result], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -52,12 +98,54 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis, onReset }) => {
     }
   };
 
-  // Extract score from the text if possible (Updated for new Job Fit prompt)
+  const handleShare = async () => {
+    const reportId = analysis?.reportId || id;
+    if (!reportId) return;
+    
+    const url = `${window.location.origin}/report/${reportId}`;
+    await navigator.clipboard.writeText(url);
+    setCopyingLink(true);
+    setTimeout(() => setCopyingLink(false), 2000);
+  };
+
+  const handleDelete = async () => {
+    const reportId = analysis?.reportId || id;
+    if (!reportId) return;
+    
+    if (!window.confirm("Are you sure you want to delete this report?")) return;
+
+    try {
+      const res = await fetch(`/api/reports/${reportId}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (onReset) onReset();
+        else navigate('/');
+      }
+    } catch (e) {
+      console.error("Failed to delete", e);
+    }
+  };
+
+  // Extract score from the text if possible
   const getOverallScore = (text: string) => {
-    // Matches both "综合建议: **H**" and "匹配结论: **H**"
     const match = text.match(/(?:综合建议|匹配结论)[：:]\s*\*\*?([A-Za-z+-]+)\*\*?/i);
     return match ? match[1] : 'N/A';
   };
+
+  if (isLoading) {
+    return <div className="text-center py-20 text-slate-500">Loading report...</div>;
+  }
+
+  if (!analysis || analysis.error) {
+    return (
+      <div className="max-w-xl mx-auto mt-20 text-center">
+        <h3 className="text-xl font-bold text-slate-900">Report Not Found</h3>
+        <p className="text-slate-500 mt-2 mb-6">{analysis?.error || "This report does not exist or has been deleted."}</p>
+        <button onClick={() => navigate('/')} className="text-indigo-600 font-medium hover:underline">
+          Go Home
+        </button>
+      </div>
+    );
+  }
 
   const score = analysis.result ? getOverallScore(analysis.result) : null;
 
@@ -69,7 +157,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis, onReset }) => {
         <div>
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-green-500" />
-            Assessment Complete
+            {id ? 'Assessment Report' : 'Assessment Complete'}
           </h2>
           <p className="text-slate-500 text-sm mt-1">
             Analysis for <span className="font-medium text-slate-700">{analysis.fileName}</span>
@@ -77,13 +165,36 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis, onReset }) => {
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
+            {onReset && (
+              <button 
+                  onClick={onReset}
+                  className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+              >
+                  <RefreshCw className="w-4 h-4" />
+                  New Analysis
+              </button>
+            )}
+            
+            {!onReset && (
+              <button 
+                  onClick={() => navigate('/')}
+                  className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+              >
+                  <RefreshCw className="w-4 h-4" />
+                  New Analysis
+              </button>
+            )}
+
+            <div className="h-6 w-px bg-slate-200 mx-1 hidden md:block"></div>
+
             <button 
-                onClick={onReset}
-                className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                onClick={handleShare}
+                className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm relative"
             >
-                <RefreshCw className="w-4 h-4" />
-                New Analysis
+                <Share2 className="w-4 h-4" />
+                {copyingLink ? 'Copied!' : 'Share'}
             </button>
+
             <button 
                 onClick={handleDownloadMd}
                 className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
@@ -97,8 +208,18 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis, onReset }) => {
                 className="flex items-center gap-2 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait"
             >
                 <Download className="w-4 h-4" />
-                {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
+                {isGeneratingPdf ? 'Generating...' : 'PDF'}
             </button>
+
+            {(analysis.reportId || id) && (
+              <button 
+                  onClick={handleDelete}
+                  className="flex items-center gap-2 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors shadow-sm ml-1"
+                  title="Delete Report"
+              >
+                  <Trash2 className="w-4 h-4" />
+              </button>
+            )}
         </div>
       </div>
 

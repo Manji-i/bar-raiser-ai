@@ -1,8 +1,9 @@
 export const analyzeInterview = async (
   transcript: string, 
   jobTitle: string, 
-  competencies: string
-): Promise<string> => {
+  competencies: string,
+  fileName: string
+): Promise<{ result: string; reportId: string }> => {
   try {
     const response = await fetch('/api/analyze', {
       method: 'POST',
@@ -13,6 +14,7 @@ export const analyzeInterview = async (
         transcript,
         jobTitle,
         competencies,
+        fileName
       }),
     });
 
@@ -22,7 +24,7 @@ export const analyzeInterview = async (
     }
 
     const data = await response.json();
-    return data.result;
+    return data;
   } catch (error) {
     console.error("Gemini Analysis Error:", error);
     throw error;
