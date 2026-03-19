@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = path.join(__dirname, '../data');
 const REPORTS_FILE = path.join(DATA_DIR, 'reports.json');
 
 // Ensure data directory exists
@@ -18,16 +18,7 @@ if (!fs.existsSync(REPORTS_FILE)) {
   fs.writeFileSync(REPORTS_FILE, JSON.stringify([]));
 }
 
-export interface Report {
-  id: string;
-  jobTitle: string;
-  competencies: string;
-  fileName: string;
-  result: string;
-  createdAt: string;
-}
-
-const readReports = (): Report[] => {
+const readReports = () => {
   try {
     const data = fs.readFileSync(REPORTS_FILE, 'utf-8');
     return JSON.parse(data);
@@ -37,7 +28,7 @@ const readReports = (): Report[] => {
   }
 };
 
-const writeReports = (reports: Report[]) => {
+const writeReports = (reports) => {
   try {
     fs.writeFileSync(REPORTS_FILE, JSON.stringify(reports, null, 2));
   } catch (error) {
@@ -50,14 +41,14 @@ export const reportService = {
     return readReports().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
-  getById: (id: string) => {
+  getById: (id) => {
     const reports = readReports();
     return reports.find(r => r.id === id);
   },
 
-  create: (data: Omit<Report, 'id' | 'createdAt'>) => {
+  create: (data) => {
     const reports = readReports();
-    const newReport: Report = {
+    const newReport = {
       id: uuidv4(),
       createdAt: new Date().toISOString(),
       ...data
@@ -67,7 +58,7 @@ export const reportService = {
     return newReport;
   },
 
-  delete: (id: string) => {
+  delete: (id) => {
     let reports = readReports();
     const initialLength = reports.length;
     reports = reports.filter(r => r.id !== id);

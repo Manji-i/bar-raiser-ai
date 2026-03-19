@@ -120,6 +120,7 @@ if (AI_PROVIDER === 'gemini') {
 
 // Analyze Interview
 app.post('/api/analyze', async (req, res) => {
+  console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${AI_PROVIDER}`);
   try {
     const { transcript, jobTitle, competencies, fileName } = req.body; // Added fileName
 
