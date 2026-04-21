@@ -1,11 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cookieParser from 'cookie-parser';
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { reportService } from './services/reportService.js';
+import { promptService } from './services/promptService.js';
+import { userService } from './services/userService.js';
+import feishuService from './services/feishuService.js';
 
 dotenv.config({ path: '.env.local' }); // Load from .env.local for local dev, or environment variables in production
 
@@ -18,79 +23,39 @@ const __dirname = path.dirname(__filename);
 
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 
-// System Prompt (copied from constants.ts to avoid build complexity)
-const SYSTEM_PROMPT = `
-<role_definition>
-你是一位拥有 15 年以上经验的资深招聘专家（Talent Acquisition Partner），精通人才盘点与人岗匹配。
-你的核心任务不再仅仅是评估“候选人有多强”，而是评估“候选人是否适合【目标岗位】”。
-你需要结合【面试对话记录】、【岗位名称】和【能力维度要求】，生成一份侧重于“人岗匹配度”的结构化评估报告。
-</role_definition>
+// 认证中间件
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  const token = authHeader.slice(7);
+  const user = userService.verifyToken(token);
+  
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  req.user = user;
+  next();
+};
 
-<input_data>
-你需要处理以下三部分输入信息：
-1. **岗位名称 (Job Title)**: 用于推断该岗位的隐含职级、核心职责和通用胜任力。
-2. **能力维度要求 (Competency Model)**: 用户指定的必须考察的关键能力（如：学习能力、抗压能力）。
-3. **面试对话记录 (Transcript)**: 实际发生的对话内容。
-</input_data>
+// 管理员认证中间件
+const requireAdmin = (req, res, next) => {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  next();
+};
 
-<core_logic>
-**1. 岗位画像重构 (Profile Reconstruction)**
-首先，结合【岗位名称】和用户提供的【能力维度要求】，在心中构建该岗位的“理想画像”。
-- 如果岗位是“实习生/专员”，重点考察执行力、学习力、态度（潜质）。
-- 如果岗位是“总监/专家”，重点考察战略视野、资源整合、管理能力（即战力）。
-*注意：若候选人展示了极强的高阶能力（如战略规划），但岗位仅需基础执行，需在风险中提示“大材小用”或“稳定性风险”。*
-
-**2. 维度对齐与证据提取 (Alignment & Extraction)**
-优先针对用户提供的【能力维度要求】寻找证据。
-- **强制对齐**：必须针对用户列出的每一个维度进行打分。
-- **额外发现**：如果发现了用户未列出但对该【岗位名称】至关重要的能力（例如：销售岗位的“狼性”），请作为“额外加分/减分项”列出。
-- **STAR 评估**：继续沿用严格的 STAR 法则提取事实，判断水分。
-
-**3. 评分标准 (Scoring Rubric - 基于岗位层级)**
-分数不仅代表能力强弱，更代表**满足岗位需求的程度**：
-- **NH (不录用)**: 能力完全不达标，无法胜任该岗位基本职责。
-- **H- (谨慎录用)**: 能力勉强达标，但存在明显短板，需要大量培养成本。
-- **H (可录用)**: 能力与岗位要求精准匹配，能胜任工作（Right Fit）。
-- **H+ (强推荐)**: 核心能力略高于岗位要求，或具备该岗位急需的稀缺特质，能带来额外价值。
-- **MH (不可错过)**: 行业顶尖人才，且极度适配该岗位当前的战略痛点（Perfect Match）。
-
-</core_logic>
-
-<output_requirements>
-1. **结论先行**：综合评价需明确回答“匹配”还是“不匹配”，而不仅仅是“优秀”或“不优秀”。
-2. **基于画像的建议**：在建议部分，要结合岗位名称。例如：“作为【算法工程师】，该候选人工程落地能力强，但算法创新偏弱...”
-3. **风险提示升级**：增加“人岗匹配风险”（如：Overqualified, Underqualified, 动机不纯等）。
-</output_requirements>
-
-<output_template>
-## 1. 人岗匹配综述 (Job Fit Summary)
-* **岗位名称**: [插入岗位名称]
-* **匹配结论**: [NH / H- / H / H+ / MH]
-* **核心评价**: [一句话总结。不仅评价能力，还要评价匹配度。例如：虽然候选人战略思维极强，但作为【销售专员】岗位，其落地执行意愿存疑，存在人岗错配风险。]
-
-## 2. 指定维度详细评估 (Competency Evaluation)
-
-### [用户指定的维度名称 1]
-* **评分**: [分数]
-* **STAR 证据**:
-    * **S**: ...
-    * **A**: ...
-    * **R**: ...
-* **匹配度分析**: [基于岗位要求的评价。例如：对于【高级经理】岗位，此案例展现的团队规模过小，管理复杂度不足，评分为 H-。]
-
-...(循环所有用户指定的维度)...
-
-## 3. 额外能力发现 (Extra Insights based on Job Title)
-* **[模型自动推断的维度]**: [评价]
-* *说明：基于【岗位名称】，我发现候选人在该维度表现突出/薄弱，这对岗位成功至关重要。*
-
-## 4. 风险与建议
-* **能力短板**: ...
-* **匹配风险**: [重点分析：是否大材小用？是否经验断层？文化是否匹配？]
-* **后续考察建议**: ...
-</output_template>
-`;
+// Get system prompt from promptService
+const getSystemPrompt = () => {
+  const promptData = promptService.getCurrentPrompt();
+  return promptData.content;
+};
 
 // Model Configuration
 const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini'; // 'gemini' or 'doubao'
@@ -118,11 +83,145 @@ if (AI_PROVIDER === 'gemini') {
 
 // API Routes
 
-// Analyze Interview
-app.post('/api/analyze', async (req, res) => {
+// User Endpoints
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { username, password, email } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+    
+    const result = userService.register(username, password, email);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+    
+    const result = userService.login(username, password);
+    res.json(result);
+  } catch (error) {
+    res.status(401).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/logout', authenticate, (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader.slice(7);
+    userService.logout(token);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/auth/me', authenticate, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// 飞书OAuth配置端点
+app.get('/api/auth/feishu/config', (req, res) => {
+  try {
+    res.json({
+      configured: feishuService.isFeishuConfigured(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 飞书登录URL
+app.get('/api/auth/feishu/url', (req, res) => {
+  try {
+    if (!feishuService.isFeishuConfigured()) {
+      return res.status(400).json({ error: '飞书OAuth未配置' });
+    }
+    
+    const state = feishuService.generateState();
+    const authUrl = feishuService.getFeishuAuthUrl(state);
+    
+    // 保存state到cookie用于验证
+    res.cookie('feishu_oauth_state', state, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 5 * 60 * 1000, // 5分钟
+    });
+    
+    res.json({ authUrl });
+  } catch (error) {
+    console.error('获取飞书登录URL错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 飞书回调处理
+app.get('/api/auth/feishu/callback', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    const savedState = req.cookies.feishu_oauth_state;
+    
+    if (!code || !state) {
+      return res.status(400).json({ error: '缺少必需参数' });
+    }
+    
+    // 验证state
+    if (state !== savedState) {
+      return res.status(400).json({ error: '无效的state值' });
+    }
+    
+    // 获取飞书token
+    const { accessToken } = await feishuService.getFeishuToken(code);
+    
+    // 获取飞书用户信息
+    const feishuUser = await feishuService.getFeishuUserInfo(accessToken);
+    
+    console.log('准备登录/注册飞书用户:', feishuUser);
+    
+    // 登录或注册用户
+    const authResult = userService.loginOrRegisterFeishuUser(
+      feishuUser.userId,
+      feishuUser.name,
+      feishuUser.email,
+      feishuUser.avatar
+    );
+    
+    console.log('飞书登录成功，生成的token:', authResult.token);
+    
+    // 清除state cookie
+    res.clearCookie('feishu_oauth_state');
+    
+    // 重定向到前端，并传递token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    console.log('重定向到前端URL:', frontendUrl);
+    const redirectUrl = new URL('/auth/feishu/callback', frontendUrl);
+    redirectUrl.searchParams.set('token', authResult.token);
+    redirectUrl.searchParams.set('user', encodeURIComponent(JSON.stringify(authResult.user)));
+    
+    res.redirect(redirectUrl.toString());
+  } catch (error) {
+    console.error('飞书登录错误:', error);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const errorUrl = new URL('/auth/feishu/error', frontendUrl);
+    errorUrl.searchParams.set('error', error.message || '登录失败');
+    res.redirect(errorUrl.toString());
+  }
+});
+
+// Analyze Interview (需要认证)
+app.post('/api/analyze', authenticate, async (req, res) => {
   console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${AI_PROVIDER}`);
   try {
-    const { transcript, jobTitle, competencies, fileName } = req.body; // Added fileName
+    const { transcript, jobTitle, competencies, fileName } = req.body;
 
     if (!transcript || !jobTitle || !competencies) {
       return res.status(400).json({ error: 'Missing required fields: transcript, jobTitle, competencies' });
@@ -144,13 +243,15 @@ Please analyze the transcript based on the Job Title and Competency Model provid
 
     let resultText = "";
 
+    const systemPrompt = getSystemPrompt();
+    
     if (AI_PROVIDER === 'gemini') {
         if (!googleAi) throw new Error("Gemini is not configured.");
         const response = await googleAi.models.generateContent({
             model: "gemini-3-pro-preview", 
             contents: inputContent,
             config: {
-                systemInstruction: SYSTEM_PROMPT,
+                systemInstruction: systemPrompt,
                 temperature: 0.4, 
             },
         });
@@ -159,10 +260,10 @@ Please analyze the transcript based on the Job Title and Competency Model provid
         if (!openai) throw new Error("Doubao (OpenAI) is not configured.");
         const completion = await openai.chat.completions.create({
             messages: [
-                { role: "system", content: SYSTEM_PROMPT },
+                { role: "system", content: systemPrompt },
                 { role: "user", content: inputContent },
             ],
-            model: process.env.DOUBAO_ENDPOINT_ID, // e.g. ep-202406040...
+            model: process.env.DOUBAO_ENDPOINT_ID,
             temperature: 0.4,
         });
         resultText = completion.choices[0]?.message?.content;
@@ -171,13 +272,14 @@ Please analyze the transcript based on the Job Title and Competency Model provid
     }
 
     if (resultText) {
-      // Auto-save report
+      // 保存报告，关联用户ID
       const report = reportService.create({
         jobTitle,
         competencies,
         fileName: fileName || 'Unknown File',
+        transcript,
         result: resultText
-      });
+      }, req.user.id);
 
       res.json({ result: resultText, reportId: report.id });
     } else {
@@ -190,15 +292,15 @@ Please analyze the transcript based on the Job Title and Competency Model provid
   }
 });
 
-// Reports Endpoints
-app.get('/api/reports', (req, res) => {
-  const reports = reportService.getAll();
-  // Return summary list (exclude heavy result content if list is long, but for now full is fine)
+// Reports Endpoints (需要认证)
+app.get('/api/reports', authenticate, (req, res) => {
+  // 普通用户看自己的，管理员可以用 /api/admin/reports 看所有
+  const reports = reportService.getByUser(req.user.id);
   res.json(reports);
 });
 
-app.get('/api/reports/:id', (req, res) => {
-  const report = reportService.getById(req.params.id);
+app.get('/api/reports/:id', authenticate, (req, res) => {
+  const report = reportService.getById(req.params.id, req.user.id, req.user.isAdmin);
   if (report) {
     res.json(report);
   } else {
@@ -206,12 +308,105 @@ app.get('/api/reports/:id', (req, res) => {
   }
 });
 
-app.delete('/api/reports/:id', (req, res) => {
-  const success = reportService.delete(req.params.id);
+app.delete('/api/reports/:id', authenticate, (req, res) => {
+  const success = reportService.delete(req.params.id, req.user.id, req.user.isAdmin);
   if (success) {
     res.json({ success: true });
   } else {
     res.status(404).json({ error: "Report not found" });
+  }
+});
+
+// Admin Reports Endpoints (仅管理员)
+app.get('/api/admin/reports', authenticate, requireAdmin, (req, res) => {
+  const reports = reportService.getAll();
+  res.json(reports);
+});
+
+// Feedback Endpoints (需要认证)
+app.post('/api/feedback', authenticate, (req, res) => {
+  try {
+    const { reportId, rating, comments, specificIssues } = req.body;
+    
+    if (!reportId || !rating) {
+      return res.status(400).json({ error: 'Missing required fields: reportId, rating' });
+    }
+    
+    const feedback = {
+      reportId,
+      rating,
+      comments,
+      specificIssues
+    };
+    
+    promptService.saveFeedback(feedback);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error saving feedback:", error);
+    res.status(500).json({ error: error.message || "An error occurred while saving feedback." });
+  }
+});
+
+app.get('/api/feedback', authenticate, requireAdmin, (req, res) => {
+  try {
+    const feedbacks = promptService.getAllFeedback();
+    res.json(feedbacks);
+  } catch (error) {
+    console.error("Error getting feedback:", error);
+    res.status(500).json({ error: error.message || "An error occurred while getting feedback." });
+  }
+});
+
+// Prompt Iteration Endpoint
+app.post('/api/prompt/iterate', (req, res) => {
+  try {
+    const { feedbackSummary } = req.body;
+    
+    if (!feedbackSummary) {
+      return res.status(400).json({ error: 'Missing required field: feedbackSummary' });
+    }
+    
+    const newPrompt = promptService.iteratePrompt(feedbackSummary);
+    res.json({ success: true, prompt: newPrompt });
+  } catch (error) {
+    console.error("Error iterating prompt:", error);
+    res.status(500).json({ error: error.message || "An error occurred while iterating prompt." });
+  }
+});
+
+// Get Current Prompt Endpoint
+app.get('/api/prompt/current', (req, res) => {
+  try {
+    const prompt = promptService.getCurrentPrompt();
+    res.json(prompt);
+  } catch (error) {
+    console.error("Error getting current prompt:", error);
+    res.status(500).json({ error: error.message || "An error occurred while getting current prompt." });
+  }
+});
+
+// Update Current Prompt Endpoint
+app.put('/api/prompt/current', (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+    
+    const currentPrompt = promptService.getCurrentPrompt();
+    const newPrompt = {
+      version: currentPrompt.version + 1,
+      content: content
+    };
+    
+    // Directly write the new prompt to file using already imported fs
+    const PROMPT_FILE = path.join(__dirname, 'data/systemPrompt.json');
+    fs.writeFileSync(PROMPT_FILE, JSON.stringify(newPrompt, null, 2));
+    
+    res.json({ success: true, prompt: newPrompt });
+  } catch (error) {
+    console.error("Error updating prompt:", error);
+    res.status(500).json({ error: error.message || "An error occurred while updating prompt." });
   }
 });
 

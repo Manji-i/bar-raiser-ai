@@ -4,6 +4,18 @@ import { ArrowLeft, Trash2, Calendar, FileText, Briefcase, Share2 } from 'lucide
 import { format } from 'date-fns';
 import { Report } from '../types';
 
+// 辅助函数：获取带认证的请求头
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('auth_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
 const HistoryView: React.FC = () => {
   const navigate = useNavigate();
   const [reports, setReports] = useState<Report[]>([]);
@@ -16,7 +28,7 @@ const HistoryView: React.FC = () => {
 
   const fetchReports = async () => {
     try {
-      const res = await fetch('/api/reports');
+      const res = await fetch('/api/reports', { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setReports(data);
@@ -33,7 +45,10 @@ const HistoryView: React.FC = () => {
     if (!window.confirm("Are you sure you want to delete this report?")) return;
     
     try {
-      const res = await fetch(`/api/reports/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/reports/${id}`, { 
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
       if (res.ok) {
         setReports(reports.filter(r => r.id !== id));
       }

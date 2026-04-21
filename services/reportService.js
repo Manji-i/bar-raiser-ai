@@ -37,19 +37,37 @@ const writeReports = (reports) => {
 };
 
 export const reportService = {
+  // 获取所有报告（管理员用）
   getAll: () => {
     return readReports().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
-  getById: (id) => {
-    const reports = readReports();
-    return reports.find(r => r.id === id);
+  // 获取用户自己的报告
+  getByUser: (userId) => {
+    return readReports()
+      .filter(r => r.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
-  create: (data) => {
+  getById: (id, userId = null, isAdmin = false) => {
+    const reports = readReports();
+    const report = reports.find(r => r.id === id);
+    
+    if (!report) return null;
+    
+    // 检查权限：管理员或报告的所有者
+    if (isAdmin || report.userId === userId) {
+      return report;
+    }
+    
+    return null;
+  },
+
+  create: (data, userId) => {
     const reports = readReports();
     const newReport = {
       id: uuidv4(),
+      userId,
       createdAt: new Date().toISOString(),
       ...data
     };
@@ -58,8 +76,19 @@ export const reportService = {
     return newReport;
   },
 
-  delete: (id) => {
+  delete: (id, userId = null, isAdmin = false) => {
     let reports = readReports();
+    const reportIndex = reports.findIndex(r => r.id === id);
+    
+    if (reportIndex === -1) return false;
+    
+    const report = reports[reportIndex];
+    
+    // 检查权限：管理员或报告的所有者
+    if (!isAdmin && report.userId !== userId) {
+      return false;
+    }
+    
     const initialLength = reports.length;
     reports = reports.filter(r => r.id !== id);
     if (reports.length !== initialLength) {

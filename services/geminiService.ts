@@ -1,3 +1,15 @@
+// 辅助函数：获取带认证的请求头
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('auth_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
 export const analyzeInterview = async (
   transcript: string, 
   jobTitle: string, 
@@ -7,9 +19,7 @@ export const analyzeInterview = async (
   try {
     const response = await fetch('/api/analyze', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         transcript,
         jobTitle,
