@@ -147,7 +147,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const handleFeishuCallback = (callbackToken: string, callbackUser: User) => {
     console.log('AuthContext: 处理飞书回调 - token:', !!callbackToken, 'user:', callbackUser);
     setAuthData(callbackToken, callbackUser);
-    setLoading(false); // 确保loading设置为false
+    // 不需要再设置loading，因为初始化时已经设置过了
+    // 这里只需要更新用户数据
   };
 
   const logout = async () => {

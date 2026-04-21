@@ -12,7 +12,7 @@ import { Sparkles, BrainCircuit, History, Home, Settings, LogOut, User } from 'l
 
 // 飞书回调处理组件
 const FeishuCallback: React.FC = () => {
-  const { handleFeishuCallback } = useAuth();
+  const { handleFeishuCallback, user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -28,11 +28,11 @@ const FeishuCallback: React.FC = () => {
       try {
         const decodedUserStr = decodeURIComponent(userStr);
         console.log('FeishuCallback: 解码后的userStr:', decodedUserStr);
-        const user = JSON.parse(decodedUserStr);
-        console.log('FeishuCallback: 解析后的user:', user);
-        handleFeishuCallback(token, user);
-        console.log('FeishuCallback: 准备导航到首页');
-        navigate('/');
+        const parsedUser = JSON.parse(decodedUserStr);
+        console.log('FeishuCallback: 解析后的user:', parsedUser);
+        handleFeishuCallback(token, parsedUser);
+        console.log('FeishuCallback: 用户数据已设置');
+        // 不需要立即导航，让下面的 useEffect 处理
       } catch (error) {
         console.error('处理飞书回调失败:', error);
         navigate('/login');
@@ -42,6 +42,15 @@ const FeishuCallback: React.FC = () => {
       navigate('/login');
     }
   }, [location.search, handleFeishuCallback, navigate]);
+
+  // 监听用户状态，当用户数据设置好后再导航
+  React.useEffect(() => {
+    console.log('FeishuCallback: 用户状态变化 - loading:', loading, 'user:', !!user);
+    if (!loading && user) {
+      console.log('FeishuCallback: 用户已登录，导航到首页');
+      navigate('/', { replace: true });
+    }
+  }, [user, loading, navigate]);
   
   return (
     <div className="min-h-screen flex items-center justify-center">
