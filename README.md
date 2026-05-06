@@ -39,7 +39,6 @@ This application helps analyze interview transcripts using the STAR method to ge
    DOUBAO_ENDPOINT_ID=your_endpoint_id
    DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
    
-   PORT=3000
    ```
 
 3. **Development Mode**
@@ -72,7 +71,7 @@ This application helps analyze interview transcripts using the STAR method to ge
 
 2. **Run the Container**
    ```bash
-   docker run -p 3000:3000 \
+   docker run -p \
      -e AI_PROVIDER=doubao \
      -e DOUBAO_API_KEY=your_key \
      -e DOUBAO_ENDPOINT_ID=your_id \
@@ -89,7 +88,6 @@ This application helps analyze interview transcripts using the STAR method to ge
    - Create a new VCI instance or VKE workload.
    - Select your image from CR.
    - **Crucial**: Set the Environment Variables (`AI_PROVIDER`, `DOUBAO_API_KEY`, `DOUBAO_ENDPOINT_ID`) in the container configuration.
-   - Expose port 3000.
 
 ## Project Structure
 
