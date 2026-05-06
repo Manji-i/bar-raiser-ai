@@ -46,8 +46,6 @@ This application helps analyze interview transcripts using the STAR method to ge
    Run the frontend (Vite) and backend (Express) concurrently with hot-reloading:
    ```bash
    npm run dev
-   ```
-   Open http://localhost:5173 to view the app. The backend will run on port 3000.
 
 ## Production Build & Deployment
 
