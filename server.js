@@ -12,12 +12,12 @@ import { promptService } from './services/promptService.js';
 import { userService } from './services/userService.js';
 import feishuService from './services/feishuService.js';
 
-dotenv.config({ path: '.env.local' }); // Load from .env.local for local dev, or environment variables in production
+dotenv.config({ path: '.env', quiet: true });
+dotenv.config({ path: '.env.local', override: true, quiet: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Fix for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -185,8 +185,6 @@ app.get('/api/auth/feishu/callback', async (req, res) => {
     // 获取飞书用户信息
     const feishuUser = await feishuService.getFeishuUserInfo(accessToken);
     
-    console.log('准备登录/注册飞书用户:', feishuUser);
-    
     // 登录或注册用户
     const authResult = userService.loginOrRegisterFeishuUser(
       feishuUser.userId,
@@ -195,14 +193,11 @@ app.get('/api/auth/feishu/callback', async (req, res) => {
       feishuUser.avatar
     );
     
-    console.log('飞书登录成功，生成的token:', authResult.token);
-    
     // 清除state cookie
     res.clearCookie('feishu_oauth_state');
     
     // 重定向到前端，并传递token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    console.log('重定向到前端URL:', frontendUrl);
     const redirectUrl = new URL('/auth/feishu/callback', frontendUrl);
     redirectUrl.searchParams.set('token', authResult.token);
     redirectUrl.searchParams.set('user', encodeURIComponent(JSON.stringify(authResult.user)));
@@ -339,7 +334,12 @@ app.post('/api/feedback', authenticate, (req, res) => {
       specificIssues
     };
     
-    promptService.saveFeedback(feedback);
+    const report = reportService.getById(reportId, req.user.id, req.user.isAdmin);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    promptService.saveFeedback(feedback, report);
     res.json({ success: true });
   } catch (error) {
     console.error("Error saving feedback:", error);
@@ -358,7 +358,7 @@ app.get('/api/feedback', authenticate, requireAdmin, (req, res) => {
 });
 
 // Prompt Iteration Endpoint
-app.post('/api/prompt/iterate', (req, res) => {
+app.post('/api/prompt/iterate', authenticate, requireAdmin, (req, res) => {
   try {
     const { feedbackSummary } = req.body;
     
@@ -375,7 +375,7 @@ app.post('/api/prompt/iterate', (req, res) => {
 });
 
 // Get Current Prompt Endpoint
-app.get('/api/prompt/current', (req, res) => {
+app.get('/api/prompt/current', authenticate, requireAdmin, (req, res) => {
   try {
     const prompt = promptService.getCurrentPrompt();
     res.json(prompt);
@@ -386,7 +386,7 @@ app.get('/api/prompt/current', (req, res) => {
 });
 
 // Update Current Prompt Endpoint
-app.put('/api/prompt/current', (req, res) => {
+app.put('/api/prompt/current', authenticate, requireAdmin, (req, res) => {
   try {
     const { content } = req.body;
     if (!content) {
@@ -419,7 +419,11 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`AI Provider: ${AI_PROVIDER}`);
-});
+export { app };
+
+if (process.argv[1] === __filename) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    console.log(`AI Provider: ${AI_PROVIDER}`);
+  });
+}

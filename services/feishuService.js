@@ -44,10 +44,7 @@ const getAppAccessToken = async () => {
       }),
     });
 
-    const responseText = await response.text();
-    console.log('获取app_access_token响应:', responseText);
-    
-    const data = JSON.parse(responseText);
+    const data = await response.json();
     
     if (data.code !== 0) {
       throw new Error(`获取app_access_token失败: ${data.msg}`);
@@ -83,10 +80,7 @@ const getFeishuToken = async (code) => {
       }),
     });
 
-    const responseText = await response.text();
-    console.log('获取用户token响应:', responseText);
-    
-    const data = JSON.parse(responseText);
+    const data = await response.json();
     
     if (data.code !== 0) {
       throw new Error(`获取飞书token失败: ${data.msg}`);
@@ -112,10 +106,7 @@ const getFeishuUserInfo = async (accessToken) => {
       },
     });
 
-    const responseText = await response.text();
-    console.log('获取用户信息响应:', responseText);
-    
-    const data = JSON.parse(responseText);
+    const data = await response.json();
 
     if (data.code !== 0) {
       throw new Error(`获取飞书用户信息失败: ${data.msg}`);
@@ -137,7 +128,7 @@ const getFeishuUserInfo = async (accessToken) => {
 // 检查飞书配置是否有效
 const isFeishuConfigured = () => {
   const config = getFeishuConfig();
-  return config.clientId && config.clientSecret && config.redirectUri;
+  return Boolean(config.clientId && config.clientSecret && config.redirectUri);
 };
 
 export default {

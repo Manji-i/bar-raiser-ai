@@ -17,37 +17,28 @@ const FeishuCallback: React.FC = () => {
   const location = useLocation();
   
   React.useEffect(() => {
-    console.log('FeishuCallback: 开始处理回调');
     const params = new URLSearchParams(location.search);
     const token = params.get('token');
     const userStr = params.get('user');
     
-    console.log('FeishuCallback: URL参数 - token:', !!token, 'userStr:', !!userStr);
-    
     if (token && userStr) {
       try {
         const decodedUserStr = decodeURIComponent(userStr);
-        console.log('FeishuCallback: 解码后的userStr:', decodedUserStr);
         const parsedUser = JSON.parse(decodedUserStr);
-        console.log('FeishuCallback: 解析后的user:', parsedUser);
         handleFeishuCallback(token, parsedUser);
-        console.log('FeishuCallback: 用户数据已设置');
         // 不需要立即导航，让下面的 useEffect 处理
       } catch (error) {
         console.error('处理飞书回调失败:', error);
         navigate('/login');
       }
     } else {
-      console.log('FeishuCallback: 缺少参数，导航到登录页');
       navigate('/login');
     }
   }, [location.search, handleFeishuCallback, navigate]);
 
   // 监听用户状态，当用户数据设置好后再导航
   React.useEffect(() => {
-    console.log('FeishuCallback: 用户状态变化 - loading:', loading, 'user:', !!user);
     if (!loading && user) {
-      console.log('FeishuCallback: 用户已登录，导航到首页');
       navigate('/', { replace: true });
     }
   }, [user, loading, navigate]);
@@ -92,8 +83,6 @@ const FeishuError: React.FC = () => {
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
   
-  console.log('ProtectedRoute: loading=', loading, 'user=', !!user);
-  
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -103,7 +92,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
   
   if (!user) {
-    console.log('ProtectedRoute: 没有用户，导航到登录页');
     return <Navigate to="/login" replace />;
   }
   
@@ -114,8 +102,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 const LoginRoute: React.FC = () => {
   const { user, loading } = useAuth();
   
-  console.log('LoginRoute: loading=', loading, 'user=', !!user);
-  
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -125,7 +111,6 @@ const LoginRoute: React.FC = () => {
   }
   
   if (user) {
-    console.log('LoginRoute: 已有用户，导航到首页');
     return <Navigate to="/" replace />;
   }
   

@@ -25,12 +25,14 @@ RUN npm install --only=production
 
 # Copy backend source code
 COPY server.js ./
+COPY services ./services
 
 # Copy built frontend assets from builder stage
 COPY --from=builder /app/dist ./dist
 
 # Create a non-root user for security (optional but recommended)
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN mkdir -p data && chown -R appuser:appgroup /app/data
 USER appuser
 
 # Expose the port

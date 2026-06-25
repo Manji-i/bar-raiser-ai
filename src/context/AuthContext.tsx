@@ -29,12 +29,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isFeishuConfigured, setIsFeishuConfigured] = useState(false);
 
   useEffect(() => {
-    console.log('AuthContext: 初始化中...');
     // 从localStorage恢复登录状态
     const savedToken = localStorage.getItem('auth_token');
     const savedUser = localStorage.getItem('auth_user');
-    
-    console.log('AuthContext: 从localStorage读取 - token:', !!savedToken, 'user:', !!savedUser);
     
     if (savedToken && savedUser) {
       setToken(savedToken);
@@ -43,7 +40,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     // 检查飞书配置
     checkFeishuConfig();
-    console.log('AuthContext: 设置loading为false');
     setLoading(false);
   }, []);
 
@@ -145,7 +141,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // 处理飞书回调
   const handleFeishuCallback = (callbackToken: string, callbackUser: User) => {
-    console.log('AuthContext: 处理飞书回调 - token:', !!callbackToken, 'user:', callbackUser);
     setAuthData(callbackToken, callbackUser);
     // 不需要再设置loading，因为初始化时已经设置过了
     // 这里只需要更新用户数据

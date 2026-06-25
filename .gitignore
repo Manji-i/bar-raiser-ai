@@ -10,6 +10,9 @@ lerna-debug.log*
 # Data
 data/
 
+# Local agent/tooling state
+.trae/
+
 node_modules
 dist
 dist-ssr

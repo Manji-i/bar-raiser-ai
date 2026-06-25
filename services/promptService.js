@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { reportService } from './reportService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,25 +36,44 @@ const initializePrompt = () => {
 </input_data>
 
 <core_logic>
-**1. 岗位画像重构 (Profile Reconstruction)**
-首先，结合【岗位名称】和用户提供的【能力维度要求】，在心中构建该岗位的“理想画像”。
+**1. 基础信息与画像抓取 (Information Extraction)**
+从对话中精准提取候选人的硬性背景，若逐字稿中未提及则标注为“未提及”。
+- **基本状态**：在职情况、跳槽动机、面试进展、已有 Offer。
+- **职场背书**：当前职级、过往绩效、一句话核心工作内容。
+
+**2. 组织与业务映射 (Org & Business Mapping)**
+基于候选人的沟通描述，还原其所在企业的背景：
+- **业务架构**：所在业务线的功能、核心逻辑。
+- **组织上下文**：汇报对象（上级级别）、平行部门协作关系、团队规模（下属）。
+
+**3. 岗位画像重构 (Profile Reconstruction)**
+结合【岗位名称】和用户提供的【能力维度要求】，在心中构建该岗位的“理想画像”。
+构建该岗位的“理想画像”应该主要参考用户提供的【能力维度要求】，通过【岗位名称】来拓展补齐。
 - 如果岗位是“实习生/专员”，重点考察执行力、学习力、态度（潜质）。
 - 如果岗位是“总监/专家”，重点考察战略视野、资源整合、管理能力（即战力）。
 *注意：若候选人展示了极强的高阶能力（如战略规划），但岗位仅需基础执行，需在风险中提示“大材小用”或“稳定性风险”。*
 
-**2. 维度对齐与证据提取 (Alignment & Extraction)**
+**4. 维度对齐与证据提取 (Alignment & Extraction)**
 优先针对用户提供的【能力维度要求】寻找证据。
 - **强制对齐**：必须针对用户列出的每一个维度进行打分。
 - **额外发现**：如果发现了用户未列出但对该【岗位名称】至关重要的能力（例如：销售岗位的“狼性”），请作为“额外加分/减分项”列出。
 - **STAR 评估**：继续沿用严格的 STAR 法则提取事实，判断水分。
 
-**3. 评分标准 (Scoring Rubric - 基于岗位层级)**
+**5. 评分标准 (Scoring Rubric - 基于岗位层级)**
 分数不仅代表能力强弱，更代表**满足岗位需求的程度**：
 - **NH (不录用)**: 能力完全不达标，无法胜任该岗位基本职责。
-- **H- (谨慎录用)**: 能力勉强达标，但存在明显短板，需要大量培养成本。
-- **H (可录用)**: 能力与岗位要求精准匹配，能胜任工作（Right Fit）。
-- **H+ (强推荐)**: 核心能力略高于岗位要求，或具备该岗位急需的稀缺特质，能带来额外价值。
+- **H- (谨慎录用)**: 能力勉强达标，但存在明显短板。分享的案例是个人真实案例，STAR缺少证据，项目挑战不大（通常为个人项目，比如：学习PS、常规招聘职位、数量不多时间不紧），没有主动思考如何做的更好，复盘向外归因。
+- **H (可录用)**: 能力与岗位要求精准匹配，能胜任工作（Right Fit），分享的案例是个人真实案例，收集到的STAR证据有自己的思考，项目有挑战（比如：项目规模大、技术难度高、时间紧任务重等），个人承担了最重要的部分，主动思考如何解决困难，不回避冲突挑战，有复盘反思和沉淀。
+- **H+ (强推荐)**: 核心能力略高于岗位要求，或具备该岗位急需的稀缺特质，能带来额外价值。分享的案例是个人真实案例，收集到的STAR证据有自己的思考，沉淀了方法论，项目有足够的挑战（比如：项目规模大、技术难度高、需要跨部门合作、时间紧任务重等等），个人承担了最重要的部分，主动思考如何解决困难，不回避冲突挑战，有复盘反思和沉淀。
 - **MH (不可错过)**: 行业顶尖人才，且极度适配该岗位当前的战略痛点（Perfect Match）。
+
+**6. 分数的核心区别 (Key Distinctions)**
+- **NH (不录用)**: 严重作弊，答非所问，逻辑完全不自洽。
+- **H- (谨慎录用)**: 分享的案例和证据明显过于简单，专业能力弱，跟岗位匹配度差。比如学习PS、常规招聘职位、招聘数量不多时间不紧。
+- **H (可录用)**: 分享的案例和证据与岗位要求匹配，专业能力跟岗位匹配度高，做过的事情有自己的思考（表达清晰，逻辑清晰）。比如学习能力，能快速学习，有学习方法，有复盘和反思。比如抗压能力，能在压力下保持冷静，不回避冲突挑战，有复盘和沉淀。比如自驱积极，针对被设定的目标，能努力达到，主动推进解决卡点。
+- **H+ (强推荐)**: 核心能力略高于岗位要求，或具备该岗位急需的稀缺特质，能带来额外价值。在 H 的基础上，做的更进一步，比如学习能力，除了 H 的表述，还有能有对外分享和输出。比如抗压能力，除了 H 的表述，还有积极的解决问题，并且挑战和复杂度更高。比如自驱积极，除了 H 的表述，能主动设定更高目标并且达到。
+- **MH (不可不可错过)**: 行业顶尖人才，且极度适配该岗位当前的战略痛点（Perfect Match）。
+
 
 </core_logic>
 
@@ -66,12 +84,23 @@ const initializePrompt = () => {
 </output_requirements>
 
 <output_template>
-## 1. 人岗匹配综述 (Job Fit Summary)
+## 0. 候选人基础概览 (Candidate Overview)
+* **岗位/职级**: [当前职级] | **状态**: [是否在职]
+* **看机会原因**: [简述原因]
+* **面试/Offer情况**: [公司名及进展]
+* **过往绩效**: [如: 连续S/前10%等]
+* **核心工作**: [一句话总结：负责...实现...]
+
+## 1. 业务架构与组织环境 (Org Mapping)
+* **业务背景**: [描述其所在业务的逻辑、规模或技术栈]
+* **汇报/组织关系**: [汇报给谁，与哪些部门平行，在组织中的位置]
+
+## 2. 人岗匹配综述 (Job Fit Summary)
 * **岗位名称**: [插入岗位名称]
 * **匹配结论**: [NH / H- / H / H+ / MH]
 * **核心评价**: [一句话总结。不仅评价能力，还要评价匹配度。例如：虽然候选人战略思维极强，但作为【销售专员】岗位，其落地执行意愿存疑，存在人岗错配风险。]
 
-## 2. 指定维度详细评估 (Competency Evaluation)
+## 3. 指定维度详细评估 (Competency Evaluation)
 
 ### [用户指定的维度名称 1]
 * **评分**: [分数]
@@ -83,11 +112,11 @@ const initializePrompt = () => {
 
 ...(循环所有用户指定的维度)...
 
-## 3. 额外能力发现 (Extra Insights based on Job Title)
+## 4. 额外能力发现 (Extra Insights based on Job Title)
 * **[模型自动推断的维度]**: [评价]
 * *说明：基于【岗位名称】，我发现候选人在该维度表现突出/薄弱，这对岗位成功至关重要。*
 
-## 4. 风险与建议
+## 5. 风险与建议
 * **能力短板**: ...
 * **匹配风险**: [重点分析：是否大材小用？是否经验断层？文化是否匹配？]
 * **后续考察建议**: ...
@@ -119,22 +148,19 @@ export const promptService = {
   },
 
   // 保存反馈
-  saveFeedback: (feedback) => {
+  saveFeedback: (feedback, report = null) => {
     const feedbacks = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf8'));
     
     // 获取完整的报告信息，添加到反馈中
     let reportContext = {};
-    if (feedback.reportId) {
-      const report = reportService.getById(feedback.reportId);
-      if (report) {
-        reportContext = {
-          jobTitle: report.jobTitle,
-          competencies: report.competencies,
-          fileName: report.fileName,
-          transcript: report.transcript,  // 保存面试原文
-          assessmentResult: report.result
-        };
-      }
+    if (report) {
+      reportContext = {
+        jobTitle: report.jobTitle,
+        competencies: report.competencies,
+        fileName: report.fileName,
+        transcript: report.transcript,  // 保存面试原文
+        assessmentResult: report.result
+      };
     }
     
     feedbacks.push({
