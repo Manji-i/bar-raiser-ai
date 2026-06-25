@@ -10,6 +10,9 @@ lerna-debug.log*
 # Data
 data/
 
+# Local environment files
+.env
+
 # Local agent/tooling state
 .trae/
 
@@ -28,3 +31,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.backup
