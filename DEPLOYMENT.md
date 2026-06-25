@@ -1,121 +1,148 @@
 # 部署指南
 
-## 🚀 快速开始
+## 线上现状
 
-### 方式一：Docker 部署（推荐）
+- 线上地址：`http://14.103.45.4:3000/`
+- 服务器：`root@14.103.45.4`
+- 项目目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
+- 进程管理：PM2，进程名 `bar-raiser-ai`
+- 启动命令：`npm start`
+
+线上服务器访问 GitHub 不稳定。若 `git fetch` 或 `git pull` 卡住，使用下方“Bundle 部署路径”。
+
+## 标准部署路径
+
+适用于服务器能正常访问 GitHub 的情况：
 
 ```bash
-# 1. 构建 Docker 镜像
+ssh root@14.103.45.4
+cd /root/bar-raiser-ai-new/bar-raiser-ai
+git fetch origin
+git pull --ff-only origin main
+npm install
+npm run build
+pm2 restart bar-raiser-ai --update-env
+pm2 save
+```
+
+验证：
+
+```bash
+pm2 status bar-raiser-ai
+curl -sS -I http://127.0.0.1:3000/
+```
+
+## Bundle 部署路径
+
+适用于服务器拉 GitHub 失败或卡住的情况。在本机项目目录执行：
+
+```bash
+git status -sb
+git push origin main
+git bundle create /private/tmp/bar-raiser-ai-main.bundle origin/main
+scp /private/tmp/bar-raiser-ai-main.bundle root@14.103.45.4:/tmp/bar-raiser-ai-main.bundle
+```
+
+然后在服务器执行：
+
+```bash
+cd /root/bar-raiser-ai-new/bar-raiser-ai
+git fetch /tmp/bar-raiser-ai-main.bundle refs/remotes/origin/main
+git merge --ff-only FETCH_HEAD
+git update-ref refs/remotes/origin/main HEAD
+npm install
+npm run build
+pm2 restart bar-raiser-ai --update-env
+pm2 save
+```
+
+验证线上资源是否更新：
+
+```bash
+curl -sS -L http://14.103.45.4:3000/ | grep -o '/assets/index-[A-Za-z0-9_-]*\.js'
+```
+
+## Docker 部署
+
+```bash
 docker build -t bar-raiser-ai .
-
-# 2. 准备生产环境配置
-cp .env.example .env
-# 编辑 .env 文件，填入实际的生产环境配置
-
-# 3. 创建数据目录
 mkdir -p data
-
-# 4. 运行容器
 docker run -d \
   -p 3000:3000 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/.env:/app/.env \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/.env:/app/.env" \
   --name bar-raiser-ai \
+  --restart unless-stopped \
   bar-raiser-ai
 ```
 
-### 方式二：直接部署
+Dockerfile 会复制 `server.js`、`services/` 和 `dist/`，并创建可写的 `/app/data`。
+
+## 直接部署
 
 ```bash
-# 1. 安装依赖
-npm install --only=production
-
-# 2. 构建前端（已完成）
-# npm run build
-
-# 3. 准备环境配置
-cp .env.example .env
-# 编辑 .env 文件，填入实际的生产环境配置
-
-# 4. 确保 data 目录存在
-mkdir -p data
-
-# 5. 启动服务
+npm install
+npm run build
 npm start
 ```
 
-## 📋 环境配置说明
+生产环境建议用 PM2：
 
-### 必需配置项
+```bash
+pm2 start npm --name bar-raiser-ai -- start
+pm2 save
+```
+
+## 环境配置
 
 | 配置项 | 说明 | 示例 |
 |--------|------|------|
 | `PORT` | 服务端口 | `3000` |
-| `NODE_ENV` | 环境模式 | `production` |
 | `FRONTEND_URL` | 前端访问地址 | `https://your-domain.com` |
 | `AI_PROVIDER` | AI 服务提供商 | `doubao` |
 | `DOUBAO_ENDPOINT_ID` | 豆包 Endpoint ID | `ep-xxx` |
 | `DOUBAO_API_KEY` | 豆包 API Key | `xxx` |
+| `DOUBAO_BASE_URL` | 豆包 OpenAI-compatible Base URL | `https://ark.cn-beijing.volces.com/api/v3` |
+| `GEMINI_API_KEY` | Gemini API Key | `xxx` |
+| `FEISHU_APP_ID` | 飞书应用 ID | `cli_xxx` |
+| `FEISHU_APP_SECRET` | 飞书应用密钥 | `xxx` |
+| `FEISHU_REDIRECT_URI` | 飞书 OAuth 回调地址 | `http://localhost:3000/api/auth/feishu/callback` |
 
-### 飞书 OAuth 配置（可选）
+不要在 `.env` 文件里设置 `NODE_ENV=production`。Vite 会提示该写法不受支持；生产构建由 `npm run build` 控制。
 
-| 配置项 | 说明 |
-|--------|------|
-| `FEISHU_APP_ID` | 飞书应用 ID |
-| `FEISHU_APP_SECRET` | 飞书应用密钥 |
-| `FEISHU_REDIRECT_URI` | 回调地址 |
-
-详细配置说明请参考 [FEISHU_OAUTH_SETUP.md](FEISHU_OAUTH_SETUP.md)
-
-## 🔐 安全建议
-
-1. **环境变量**：生产环境请使用环境变量管理工具，不要提交敏感信息到 Git
-2. **数据持久化**：确保 data 目录有持久化存储
-3. **HTTPS**：生产环境建议使用 HTTPS
-4. **访问控制**：配置适当的访问控制和防火墙规则
-
-## 📊 数据管理
+## 数据管理
 
 应用数据存储在 `data/` 目录：
-- `users.json` - 用户数据
-- `reports.json` - 评估报告
-- `feedback.json` - 用户反馈
-- `systemPrompt.json` - 系统提示词
 
-## 🔄 更新部署
+- `users.json`：用户数据
+- `reports.json`：评估报告
+- `feedback.json`：用户反馈
+- `systemPrompt.json`：系统提示词
 
-```bash
-# 1. 拉取最新代码
-git pull
+这些文件可能包含用户 token、候选人材料和评估结果。部署时要持久化 `data/`，不要提交真实内容。
 
-# 2. 重新构建前端
-npm run build
-
-# 3. 重启服务（Docker）
-docker stop bar-raiser-ai
-docker rm bar-raiser-ai
-docker build -t bar-raiser-ai .
-docker run -d ...  # 同上方启动命令
-
-# 或者重启服务（直接部署）
-# 停止旧进程，重新 npm start
-```
-
-## 🛠️ 故障排查
+## 故障排查
 
 ### 端口被占用
+
 ```bash
-# 查找占用端口的进程
-lsof -i :3000
-# 或者修改 .env 中的 PORT
+ss -ltnp | grep ':3000'
 ```
 
-### 依赖问题
+### PM2 服务异常
+
 ```bash
-# 重新安装依赖
-rm -rf node_modules
-npm install
+pm2 status bar-raiser-ai
+pm2 logs bar-raiser-ai
+pm2 restart bar-raiser-ai --update-env
 ```
+
+### 服务器 git fetch 卡住
+
+1. 用 `ps -eo pid,ppid,etime,cmd | grep 'git fetch'` 确认卡住进程。
+2. 终止本次部署启动的卡住进程。
+3. 改用 Bundle 部署路径。
 
 ### AI 服务问题
-检查 API Key 配置是否正确，查看服务端日志
+
+检查对应 API Key、Endpoint ID、Base URL 是否正确，查看 PM2 日志里的后端错误。

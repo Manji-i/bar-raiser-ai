@@ -26,7 +26,8 @@
 
 ## 敏感数据边界
 
-- 不读取、不打印、不提交 `.env.local`、`.env.production` 或任何真实密钥文件。
+- 不读取、不打印、不提交 `.env.local`、`.env` 或任何真实密钥文件。
+- `.env.production` 当前作为仓库模板文件存在；不要读取其内容，修改前必须先确认，且不得写入真实密钥。
 - 不把 API Key、token、密码、飞书凭证、候选人面试原文写入代码、日志、提交信息或文档。
 - `data/users.json` 可能包含密码哈希和会话 token；`data/reports.json`、`data/feedback.json` 可能包含候选人材料。默认只查看结构和数量，不展开内容。
 - 修改 `.env*`、密钥、token、部署环境变量前必须先停下来确认。
@@ -60,7 +61,9 @@
 ## 部署注意
 
 - 线上站点：`http://14.103.45.4:3000/`。
+- 线上服务当前由 `root@14.103.45.4` 的 PM2 管理，项目目录是 `/root/bar-raiser-ai-new/bar-raiser-ai`，进程名是 `bar-raiser-ai`。
 - `dist/` 是构建产物，线上是否最新不能只看源码，要对比线上 HTML 引用的 asset hash。
+- 目标服务器访问 GitHub 不稳定；如果 `git fetch`/`git pull` 卡住，优先用本机 `git bundle` 传到服务器后快进合并。
 - Dockerfile、部署脚本、生产环境配置会影响发布路径；修改前先说明影响，生产发布必须先确认。
 - 当前后端依赖 `services/` 和 `data/`。调整 Dockerfile 或部署方式时，必须验证运行时是否复制了必要文件并具备写入 `data/` 的权限。
 
