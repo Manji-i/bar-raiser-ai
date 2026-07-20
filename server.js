@@ -59,6 +59,8 @@ const getSystemPrompt = () => {
 
 // Model Configuration
 const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini'; // 'gemini' or 'doubao'
+// Doubao model: prefer DOUBAO_MODEL (Ark model ID), fall back to legacy DOUBAO_ENDPOINT_ID
+const DOUBAO_MODEL = process.env.DOUBAO_MODEL || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2-1-pro-260628';
 
 // Initialize AI Clients
 let googleAi = null;
@@ -258,7 +260,7 @@ Please analyze the transcript based on the Job Title and Competency Model provid
                 { role: "system", content: systemPrompt },
                 { role: "user", content: inputContent },
             ],
-            model: process.env.DOUBAO_ENDPOINT_ID,
+            model: DOUBAO_MODEL,
             temperature: 0.4,
         });
         resultText = completion.choices[0]?.message?.content;

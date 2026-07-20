@@ -100,7 +100,8 @@ pm2 save
 | `PORT` | 服务端口 | `3000` |
 | `FRONTEND_URL` | 前端访问地址 | `https://your-domain.com` |
 | `AI_PROVIDER` | AI 服务提供商 | `doubao` |
-| `DOUBAO_ENDPOINT_ID` | 豆包 Endpoint ID | `ep-xxx` |
+| `DOUBAO_MODEL` | 豆包模型 ID，默认 Seed 2.1 Pro | `doubao-seed-2-1-pro-260628` |
+| `DOUBAO_ENDPOINT_ID` | 旧版豆包 Endpoint ID（`DOUBAO_MODEL` 优先） | `ep-xxx` |
 | `DOUBAO_API_KEY` | 豆包 API Key | `xxx` |
 | `DOUBAO_BASE_URL` | 豆包 OpenAI-compatible Base URL | `https://ark.cn-beijing.volces.com/api/v3` |
 | `GEMINI_API_KEY` | Gemini API Key | `xxx` |

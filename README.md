@@ -42,7 +42,10 @@ GEMINI_API_KEY=your_gemini_key
 
 # 豆包 Ark / 火山引擎
 DOUBAO_API_KEY=your_doubao_key
-DOUBAO_ENDPOINT_ID=your_endpoint_id
+# 模型 ID，默认 doubao-seed-2-1-pro-260628（Seed 2.1 Pro）
+DOUBAO_MODEL=doubao-seed-2-1-pro-260628
+# 旧版接入点方式仍兼容，DOUBAO_MODEL 优先
+# DOUBAO_ENDPOINT_ID=your_endpoint_id
 DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 
 # 服务端口
@@ -80,11 +83,11 @@ docker build -t bar-raiser-ai .
 docker run -p 3000:3000 \
   -e AI_PROVIDER=doubao \
   -e DOUBAO_API_KEY=your_key \
-  -e DOUBAO_ENDPOINT_ID=your_endpoint_id \
+  -e DOUBAO_MODEL=doubao-seed-2-1-pro-260628 \
   bar-raiser-ai
 ```
 
-部署到火山引擎 VCI、VKE 或其他容器平台时，需要在容器环境变量中配置 `AI_PROVIDER`、`DOUBAO_API_KEY`、`DOUBAO_ENDPOINT_ID` 等必要参数，并暴露 3000 端口。
+部署到火山引擎 VCI、VKE 或其他容器平台时，需要在容器环境变量中配置 `AI_PROVIDER`、`DOUBAO_API_KEY`、`DOUBAO_MODEL` 等必要参数（旧版 `DOUBAO_ENDPOINT_ID` 仍兼容），并暴露 3000 端口。
 
 ## 项目结构
 
