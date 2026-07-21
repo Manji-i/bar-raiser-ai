@@ -105,22 +105,21 @@ pm2 save
 | `DOUBAO_API_KEY` | 豆包 API Key | `xxx` |
 | `DOUBAO_BASE_URL` | 豆包 OpenAI-compatible Base URL | `https://ark.cn-beijing.volces.com/api/v3` |
 | `GEMINI_API_KEY` | Gemini API Key | `xxx` |
-| `FEISHU_APP_ID` | 飞书应用 ID | `cli_xxx` |
-| `FEISHU_APP_SECRET` | 飞书应用密钥 | `xxx` |
-| `FEISHU_REDIRECT_URI` | 飞书 OAuth 回调地址 | `http://localhost:3000/api/auth/feishu/callback` |
 
 不要在 `.env` 文件里设置 `NODE_ENV=production`。Vite 会提示该写法不受支持；生产构建由 `npm run build` 控制。
 
 ## 数据管理
 
-应用数据存储在 `data/` 目录：
+应用数据存储在 `data/app.db`（SQLite，Node 内置 `node:sqlite` 驱动，见 `services/db.js`）：
 
-- `users.json`：用户数据
-- `reports.json`：评估报告
-- `feedback.json`：用户反馈
-- `systemPrompt.json`：系统提示词
+- `users` / `tokens` 表：用户数据和会话 token
+- `reports` 表：评估报告
+- `feedback` 表：用户反馈
+- `system_prompt` 表：系统提示词（含版本历史）
 
-这些文件可能包含用户 token、候选人材料和评估结果。部署时要持久化 `data/`，不要提交真实内容。
+历史 JSON 文件（`users.json` 等）已被 `scripts/migrate-to-sqlite.mjs` 迁移并备份为 `*.migrated.bak`。
+
+这些数据可能包含用户 token、候选人材料和评估结果。部署时要持久化 `data/`，不要提交真实内容。
 
 ## 故障排查
 

@@ -2,14 +2,14 @@
 
 ## 项目定位
 
-这是一个面向面试记录分析的人岗匹配工具。前端负责上传/粘贴面试材料、展示报告和收集反馈；后端负责认证、AI 调用、报告存储、Prompt 管理和飞书 OAuth。
+这是一个面向面试记录分析的人岗匹配工具。前端负责上传/粘贴面试材料、展示报告和收集反馈；后端负责认证、AI 调用、报告存储和 Prompt 管理。
 
 ## 技术栈
 
 - 前端：React、TypeScript、Vite、React Router、Tailwind CDN、lucide-react
 - 后端：Node.js ESM、Express
 - AI 服务：Google Gemini 或豆包 Ark，按环境变量 `AI_PROVIDER` 切换
-- 存储：本地 JSON 文件，位于 `data/`
+- 存储：SQLite（Node 内置 `node:sqlite`），数据库文件 `data/app.db`，连接和建表见 `services/db.js`
 
 ## 目录约定
 
@@ -29,7 +29,8 @@
 - 不读取、不打印、不提交 `.env.local`、`.env` 或任何真实密钥文件。
 - `.env.production` 当前作为仓库模板文件存在；不要读取其内容，修改前必须先确认，且不得写入真实密钥。
 - 不把 API Key、token、密码、飞书凭证、候选人面试原文写入代码、日志、提交信息或文档。
-- `data/users.json` 可能包含密码哈希和会话 token；`data/reports.json`、`data/feedback.json` 可能包含候选人材料。默认只查看结构和数量，不展开内容。
+- `data/app.db` 包含密码哈希、会话 token（`users`/`tokens` 表）和候选人材料（`reports`/`feedback` 表）。默认只查看表结构和行数，不展开内容。
+- `data/*.migrated.bak` 是 JSON 存储时代的迁移备份，同样按敏感数据处理。
 - 修改 `.env*`、密钥、token、部署环境变量前必须先停下来确认。
 
 ## 开发流程
@@ -73,4 +74,4 @@
 - 普通用户只能访问自己的报告；管理员入口需要后端权限校验。
 - Prompt 相关接口属于高权限能力，新增或调整时必须考虑认证和管理员限制。
 - 文件解析在浏览器侧完成，PDF worker 配置变化要实际上传 PDF 验证。
-- 本地 JSON 存储适合 MVP；涉及多人生产、审计、并发写入时，应先设计持久化方案，不直接扩大 JSON 写法。
+- 存储已迁移到 SQLite（`node:sqlite`）。历史 JSON 文件由 `scripts/migrate-to-sqlite.mjs` 一次性导入（幂等，users 表非空则跳过），不要再写回 JSON 存储。

@@ -1,27 +1,6 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { db } from './db.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROMPT_FILE = path.join(__dirname, '../data/systemPrompt.json');
-const FEEDBACK_FILE = path.join(__dirname, '../data/feedback.json');
-
-// 确保数据目录存在
-const ensureDirectoryExistence = (filePath) => {
-  const dirname = path.dirname(filePath);
-  if (!fs.existsSync(dirname)) {
-    fs.mkdirSync(dirname, { recursive: true });
-  }
-};
-
-// 初始化系统提示
-const initializePrompt = () => {
-  ensureDirectoryExistence(PROMPT_FILE);
-  if (!fs.existsSync(PROMPT_FILE)) {
-    const initialPrompt = {
-      version: 1,
-      content: `
+const DEFAULT_PROMPT_CONTENT = `
 <role_definition>
 你是一位拥有 15 年以上经验的资深招聘专家（Talent Acquisition Partner），精通人才盘点与人岗匹配。
 你的核心任务不再仅仅是评估“候选人有多强”，而是评估“候选人是否适合【目标岗位】”。
@@ -121,75 +100,79 @@ const initializePrompt = () => {
 * **匹配风险**: [重点分析：是否大材小用？是否经验断层？文化是否匹配？]
 * **后续考察建议**: ...
 </output_template>
-      `
-    };
-    fs.writeFileSync(PROMPT_FILE, JSON.stringify(initialPrompt, null, 2));
+      `;
+
+// 初始化系统提示：表为空时写入默认版本
+const initializePrompt = () => {
+  const row = db.prepare('SELECT COUNT(*) AS count FROM system_prompt').get();
+  if (row.count === 0) {
+    db.prepare('INSERT INTO system_prompt (version, content, updated_at) VALUES (?, ?, ?)')
+      .run(1, DEFAULT_PROMPT_CONTENT, new Date().toISOString());
   }
 };
 
-// 确保反馈文件存在
-const initializeFeedback = () => {
-  ensureDirectoryExistence(FEEDBACK_FILE);
-  if (!fs.existsSync(FEEDBACK_FILE)) {
-    fs.writeFileSync(FEEDBACK_FILE, JSON.stringify([], null, 2));
-  }
-};
-
-// 初始化服务
 initializePrompt();
-initializeFeedback();
+
+const toFeedback = (row) => ({
+  id: row.id,
+  reportId: row.report_id,
+  rating: row.rating,
+  comments: row.comments,
+  specificIssues: row.specific_issues ? JSON.parse(row.specific_issues) : undefined,
+  jobTitle: row.job_title,
+  competencies: row.competencies,
+  fileName: row.file_name,
+  transcript: row.transcript,
+  assessmentResult: row.assessment_result,
+  createdAt: row.created_at
+});
 
 // 导出服务
 export const promptService = {
   // 获取当前系统提示
   getCurrentPrompt: () => {
-    const promptData = JSON.parse(fs.readFileSync(PROMPT_FILE, 'utf8'));
-    return promptData;
+    const row = db.prepare('SELECT version, content FROM system_prompt ORDER BY version DESC LIMIT 1').get();
+    return { version: row.version, content: row.content };
   },
 
   // 保存反馈
   saveFeedback: (feedback, report = null) => {
-    const feedbacks = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf8'));
-    
-    // 获取完整的报告信息，添加到反馈中
-    let reportContext = {};
-    if (report) {
-      reportContext = {
-        jobTitle: report.jobTitle,
-        competencies: report.competencies,
-        fileName: report.fileName,
-        transcript: report.transcript,  // 保存面试原文
-        assessmentResult: report.result
-      };
-    }
-    
-    feedbacks.push({
-      ...feedback,
-      ...reportContext,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString()
-    });
-    fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(feedbacks, null, 2));
+    db.prepare(`
+      INSERT INTO feedback (id, report_id, rating, comments, specific_issues, job_title, competencies, file_name, transcript, assessment_result, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      Date.now().toString(),
+      feedback.reportId ?? null,
+      feedback.rating ?? null,
+      feedback.comments ?? null,
+      feedback.specificIssues ? JSON.stringify(feedback.specificIssues) : null,
+      report?.jobTitle ?? null,
+      report?.competencies ?? null,
+      report?.fileName ?? null,
+      report?.transcript ?? null,  // 保存面试原文
+      report?.result ?? null,
+      new Date().toISOString()
+    );
     return true;
   },
 
   // 获取所有反馈，按时间倒序排列
   getAllFeedback: () => {
-    const feedbacks = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf8'));
-    return feedbacks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const rows = db.prepare('SELECT * FROM feedback ORDER BY created_at DESC').all();
+    return rows.map(toFeedback);
   },
 
   // 基于反馈迭代系统提示
   iteratePrompt: (feedbackSummary) => {
-    const currentPrompt = JSON.parse(fs.readFileSync(PROMPT_FILE, 'utf8'));
-    const feedbacks = JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf8'));
-    
+    const currentPrompt = promptService.getCurrentPrompt();
+    const feedbacks = promptService.getAllFeedback();
+
     // 如果没有提供手动总结，自动生成一个
     let finalSummary = feedbackSummary;
     if (!finalSummary && feedbacks.length > 0) {
       finalSummary = generateFeedbackSummary(feedbacks);
     }
-    
+
     // 生成新的提示内容
     const newPrompt = {
       version: currentPrompt.version + 1,
@@ -200,8 +183,22 @@ ${finalSummary}
 </feedback_insights>
 `
     };
-    
-    fs.writeFileSync(PROMPT_FILE, JSON.stringify(newPrompt, null, 2));
+
+    db.prepare('INSERT INTO system_prompt (version, content, updated_at) VALUES (?, ?, ?)')
+      .run(newPrompt.version, newPrompt.content, new Date().toISOString());
+    return newPrompt;
+  },
+
+  // 直接更新系统提示内容（版本 +1）
+  updatePrompt: (content) => {
+    const currentPrompt = promptService.getCurrentPrompt();
+    const newPrompt = {
+      version: currentPrompt.version + 1,
+      content
+    };
+
+    db.prepare('INSERT INTO system_prompt (version, content, updated_at) VALUES (?, ?, ?)')
+      .run(newPrompt.version, newPrompt.content, new Date().toISOString());
     return newPrompt;
   }
 };
@@ -210,7 +207,7 @@ ${finalSummary}
 const generateFeedbackSummary = (feedbacks) => {
     const lowRatingFeedbacks = feedbacks.filter(f => f.rating <= 3);
     const issuesCount = {};
-    
+
     // 统计问题出现次数
     feedbacks.forEach(f => {
       if (f.specificIssues) {
@@ -219,13 +216,13 @@ const generateFeedbackSummary = (feedbacks) => {
         });
       }
     });
-    
+
     let summary = `\n基于 ${feedbacks.length} 条用户反馈的总结：\n\n`;
-    
+
     if (lowRatingFeedbacks.length > 0) {
       summary += `低分反馈（≤3星）：${lowRatingFeedbacks.length} 条\n`;
     }
-    
+
     if (Object.keys(issuesCount).length > 0) {
       summary += '\n常见问题：\n';
       Object.entries(issuesCount)
@@ -234,7 +231,7 @@ const generateFeedbackSummary = (feedbacks) => {
           summary += `- ${issue}：${count} 次\n`;
         });
     }
-    
+
     // 添加用户评论的关键内容
     const comments = feedbacks.filter(f => f.comments && f.comments.trim()).map(f => f.comments);
     if (comments.length > 0) {
@@ -243,6 +240,6 @@ const generateFeedbackSummary = (feedbacks) => {
         summary += `- ${comment.substring(0, 200)}${comment.length > 200 ? '...' : ''}\n`;
       });
     }
-    
+
     return summary;
   };

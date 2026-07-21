@@ -4,13 +4,11 @@ import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { reportService } from './services/reportService.js';
 import { promptService } from './services/promptService.js';
 import { userService } from './services/userService.js';
-import feishuService from './services/feishuService.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -129,89 +127,6 @@ app.post('/api/auth/logout', authenticate, (req, res) => {
 
 app.get('/api/auth/me', authenticate, (req, res) => {
   res.json({ user: req.user });
-});
-
-// 飞书OAuth配置端点
-app.get('/api/auth/feishu/config', (req, res) => {
-  try {
-    res.json({
-      configured: feishuService.isFeishuConfigured(),
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 飞书登录URL
-app.get('/api/auth/feishu/url', (req, res) => {
-  try {
-    if (!feishuService.isFeishuConfigured()) {
-      return res.status(400).json({ error: '飞书OAuth未配置' });
-    }
-    
-    const state = feishuService.generateState();
-    const authUrl = feishuService.getFeishuAuthUrl(state);
-    
-    // 保存state到cookie用于验证
-    res.cookie('feishu_oauth_state', state, {
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 5 * 60 * 1000, // 5分钟
-    });
-    
-    res.json({ authUrl });
-  } catch (error) {
-    console.error('获取飞书登录URL错误:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 飞书回调处理
-app.get('/api/auth/feishu/callback', async (req, res) => {
-  try {
-    const { code, state } = req.query;
-    const savedState = req.cookies.feishu_oauth_state;
-    
-    if (!code || !state) {
-      return res.status(400).json({ error: '缺少必需参数' });
-    }
-    
-    // 验证state
-    if (state !== savedState) {
-      return res.status(400).json({ error: '无效的state值' });
-    }
-    
-    // 获取飞书token
-    const { accessToken } = await feishuService.getFeishuToken(code);
-    
-    // 获取飞书用户信息
-    const feishuUser = await feishuService.getFeishuUserInfo(accessToken);
-    
-    // 登录或注册用户
-    const authResult = userService.loginOrRegisterFeishuUser(
-      feishuUser.userId,
-      feishuUser.name,
-      feishuUser.email,
-      feishuUser.avatar
-    );
-    
-    // 清除state cookie
-    res.clearCookie('feishu_oauth_state');
-    
-    // 重定向到前端，并传递token
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const redirectUrl = new URL('/auth/feishu/callback', frontendUrl);
-    redirectUrl.searchParams.set('token', authResult.token);
-    redirectUrl.searchParams.set('user', encodeURIComponent(JSON.stringify(authResult.user)));
-    
-    res.redirect(redirectUrl.toString());
-  } catch (error) {
-    console.error('飞书登录错误:', error);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const errorUrl = new URL('/auth/feishu/error', frontendUrl);
-    errorUrl.searchParams.set('error', error.message || '登录失败');
-    res.redirect(errorUrl.toString());
-  }
 });
 
 // Analyze Interview (需要认证)
@@ -395,16 +310,8 @@ app.put('/api/prompt/current', authenticate, requireAdmin, (req, res) => {
       return res.status(400).json({ error: "Content is required" });
     }
     
-    const currentPrompt = promptService.getCurrentPrompt();
-    const newPrompt = {
-      version: currentPrompt.version + 1,
-      content: content
-    };
-    
-    // Directly write the new prompt to file using already imported fs
-    const PROMPT_FILE = path.join(__dirname, 'data/systemPrompt.json');
-    fs.writeFileSync(PROMPT_FILE, JSON.stringify(newPrompt, null, 2));
-    
+    const newPrompt = promptService.updatePrompt(content);
+
     res.json({ success: true, prompt: newPrompt });
   } catch (error) {
     console.error("Error updating prompt:", error);

@@ -13,75 +13,6 @@ import {
   FileSearch, ScanSearch, Crosshair, Sparkles, Check,
 } from 'lucide-react';
 
-// 飞书回调处理组件
-const FeishuCallback: React.FC = () => {
-  const { handleFeishuCallback, user, loading } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  React.useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const token = params.get('token');
-    const userStr = params.get('user');
-
-    if (token && userStr) {
-      try {
-        const decodedUserStr = decodeURIComponent(userStr);
-        const parsedUser = JSON.parse(decodedUserStr);
-        handleFeishuCallback(token, parsedUser);
-        // 不需要立即导航，让下面的 useEffect 处理
-      } catch (error) {
-        console.error('处理飞书回调失败:', error);
-        navigate('/login');
-      }
-    } else {
-      navigate('/login');
-    }
-  }, [location.search, handleFeishuCallback, navigate]);
-
-  // 监听用户状态，当用户数据设置好后再导航
-  React.useEffect(() => {
-    if (!loading && user) {
-      navigate('/', { replace: true });
-    }
-  }, [user, loading, navigate]);
-
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div>
-    </div>
-  );
-};
-
-// 飞书登录错误组件
-const FeishuError: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const params = new URLSearchParams(location.search);
-  const error = params.get('error') || '登录失败';
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center px-4 py-12">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8 text-red-600">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 90011-18 0 9 900118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">飞书登录失败</h1>
-        <p className="text-slate-600 mb-6">{error}</p>
-        <button
-          onClick={() => navigate('/login')}
-          className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-violet-600 transition-all shadow-sm"
-        >
-          返回登录
-        </button>
-      </div>
-    </div>
-  );
-};
-
 // 受保护的路由组件
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -444,10 +375,6 @@ const AppContent: React.FC = () => {
     <Routes>
       {/* 登录页面 */}
       <Route path="/login" element={<LoginRoute />} />
-
-      {/* 飞书回调路由 */}
-      <Route path="/auth/feishu/callback" element={<FeishuCallback />} />
-      <Route path="/auth/feishu/error" element={<FeishuError />} />
 
       {/* 受保护的路由 */}
       <Route path="/" element={

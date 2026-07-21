@@ -5,7 +5,6 @@ interface User {
   username: string;
   email: string | null;
   isAdmin: boolean;
-  avatar?: string;
 }
 
 interface AuthContextType {
@@ -13,11 +12,8 @@ interface AuthContextType {
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, email?: string) => Promise<void>;
-  loginWithFeishu: () => Promise<void>;
-  handleFeishuCallback: (token: string, user: User) => void;
   logout: () => Promise<void>;
   loading: boolean;
-  isFeishuConfigured: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,7 +22,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isFeishuConfigured, setIsFeishuConfigured] = useState(false);
 
   useEffect(() => {
     // 从localStorage恢复登录状态
@@ -38,23 +33,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(JSON.parse(savedUser));
     }
     
-    // 检查飞书配置
-    checkFeishuConfig();
     setLoading(false);
   }, []);
-
-  // 检查飞书配置
-  const checkFeishuConfig = async () => {
-    try {
-      const response = await fetch('/api/auth/feishu/config');
-      if (response.ok) {
-        const data = await response.json();
-        setIsFeishuConfigured(data.configured);
-      }
-    } catch (error) {
-      console.error('检查飞书配置失败:', error);
-    }
-  };
 
   // 辅助函数：带认证的请求
   const apiRequest = async (url: string, options: RequestInit = {}) => {
@@ -119,33 +99,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAuthData(data.token, data.user);
   };
 
-  // 飞书登录
-  const loginWithFeishu = async () => {
-    try {
-      const response = await fetch('/api/auth/feishu/url');
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '获取飞书登录URL失败');
-      }
-      
-      const data = await response.json();
-      
-      // 跳转到飞书授权页面
-      window.location.href = data.authUrl;
-    } catch (error) {
-      console.error('飞书登录错误:', error);
-      throw error;
-    }
-  };
-
-  // 处理飞书回调
-  const handleFeishuCallback = (callbackToken: string, callbackUser: User) => {
-    setAuthData(callbackToken, callbackUser);
-    // 不需要再设置loading，因为初始化时已经设置过了
-    // 这里只需要更新用户数据
-  };
-
   const logout = async () => {
     if (token) {
       try {
@@ -170,11 +123,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       token, 
       login, 
       register, 
-      loginWithFeishu, 
-      handleFeishuCallback, 
       logout, 
-      loading, 
-      isFeishuConfigured 
+      loading 
     }}>
       {children}
     </AuthContext.Provider>
