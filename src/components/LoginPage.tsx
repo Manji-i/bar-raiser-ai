@@ -34,7 +34,7 @@ const LoginPage: React.FC = () => {
       }
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : '操作失败，请稍后重试');
     } finally {
       setLoading(false);
     }

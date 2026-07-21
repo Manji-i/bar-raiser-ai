@@ -1,6 +1,9 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Download, RefreshCw, CheckCircle2, FileDown, Share2, Trash2, ThumbsUp, ThumbsDown, Star } from 'lucide-react';
+import {
+  Download, RefreshCw, CheckCircle2, FileDown, Share2, Trash2, Star,
+  ChevronDown, ChevronsUpDown, ChevronsDownUp, Calendar, FileText,
+} from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnalysisState, Report } from '../types';
 
@@ -24,22 +27,128 @@ interface ReportViewProps {
   onReset?: () => void;
 }
 
+interface ReportSection {
+  id: string;
+  title: string;
+  body: string;
+}
+
+interface DimensionScore {
+  name: string;
+  score: string;
+}
+
+// Rating scale, low to high
+const RATING_ORDER = ['NH', 'H-', 'H', 'H+', 'MH'];
+
+// Extract overall fit score from the report text
+const getOverallScore = (text: string) => {
+  // Expected format: "**匹配结论**: H+" (bold markers may wrap label and/or value)
+  const match = text.match(/(?:综合建议|匹配结论)\**\s*[：:]\s*\**\s*(MH|NH|H\+|H-|H)(?![+\-A-Za-z])/);
+  return match ? match[1] : 'N/A';
+};
+
+// Badge styling per rating (H+/MH -> brand gradient, H -> green, H- -> amber, NH -> red)
+const getScoreBadgeClass = (score: string) => {
+  if (score === 'MH' || score === 'H+') {
+    return 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white border-transparent';
+  }
+  if (score === 'H') return 'bg-green-50 border-green-200 text-green-800';
+  if (score === 'H-') return 'bg-amber-50 border-amber-200 text-amber-800';
+  if (score === 'NH') return 'bg-red-50 border-red-200 text-red-800';
+  return 'bg-slate-50 border-slate-200 text-slate-600';
+};
+
+// Split report markdown into sections by "## " headings; tolerant of missing structure
+const splitSections = (markdown: string): ReportSection[] => {
+  if (!markdown) return [];
+  const parts = markdown.split(/^## /m);
+  // parts[0] is the preamble before the first h2 (usually empty)
+  const sections: ReportSection[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    const chunk = parts[i];
+    const newlineIdx = chunk.indexOf('\n');
+    const title = (newlineIdx === -1 ? chunk : chunk.slice(0, newlineIdx)).trim();
+    const body = newlineIdx === -1 ? '' : chunk.slice(newlineIdx + 1);
+    if (title) {
+      sections.push({ id: `report-section-${i}`, title, body });
+    }
+  }
+  return sections;
+};
+
+// Extract per-dimension scores from section 3 of the report
+const parseDimensions = (markdown: string): DimensionScore[] => {
+  if (!markdown) return [];
+  const parts = markdown.split(/^## /m);
+  const section3 = parts.find((p) => /^3[.、\s]/.test(p.trim()));
+  if (!section3) return [];
+
+  const dims: DimensionScore[] = [];
+  const blocks = section3.split(/^### /m);
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i];
+    const newlineIdx = block.indexOf('\n');
+    const name = (newlineIdx === -1 ? block : block.slice(0, newlineIdx)).trim();
+    // Note: H+ / H- must be matched before H; the trailing lookahead (not \b) keeps
+    // "H+" / "H-" from degrading to "H" (\b fails after non-word chars like "+")
+    const scoreMatch = block.match(/\*\*评分\*\*\s*[:：]\s*\**\s*(NH|MH|H\+|H-|H)(?![+\-A-Za-z])/);
+    if (name && scoreMatch) {
+      dims.push({ name, score: scoreMatch[1] });
+    }
+  }
+  return dims;
+};
+
+// Shared custom markdown renderers (kept from the previous design language)
+const markdownComponents = {
+  h2: ({ node, ...props }: any) => (
+    <h2 className="text-xl font-bold text-white bg-slate-800 px-4 py-2 rounded-lg mt-10 mb-6 flex items-center shadow-sm break-after-avoid" {...props} />
+  ),
+  h3: ({ node, ...props }: any) => (
+    <h3 className="text-lg font-bold text-brand-700 border-b-2 border-brand-100 pb-2 mt-8 mb-4 break-after-avoid" {...props} />
+  ),
+  h4: ({ node, ...props }: any) => (
+    <h4 className="text-base font-bold text-slate-800 uppercase tracking-wide bg-slate-50 border-l-4 border-brand-500 pl-3 py-1 mt-6 mb-2 break-after-avoid" {...props} />
+  ),
+  p: ({ node, ...props }: any) => (
+    <p className="text-slate-600 leading-relaxed mb-4 text-base" {...props} />
+  ),
+  ul: ({ node, ...props }: any) => (
+    <ul className="list-disc pl-5 space-y-2 mb-4 text-slate-600" {...props} />
+  ),
+  li: ({ node, ...props }: any) => (
+    <li className="pl-1" {...props} />
+  ),
+  strong: ({ node, ...props }: any) => (
+    <strong className="font-bold text-slate-900" {...props} />
+  ),
+  blockquote: ({ node, ...props }: any) => (
+    <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-500 my-4" {...props} />
+  ),
+};
+
 const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onReset }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const contentRef = useRef<HTMLDivElement>(null);
-  
+
   const [analysis, setAnalysis] = useState<AnalysisState | null>(initialAnalysis || null);
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isLoading, setIsLoading] = useState(!initialAnalysis);
   const [copyingLink, setCopyingLink] = useState(false);
   const [feedback, setFeedback] = useState({
     rating: 0,
     comments: '',
-    specificIssues: []
+    specificIssues: [] as string[]
   });
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
+  // Collapsible sections: map of sectionId -> collapsed
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [activeSection, setActiveSection] = useState<string | null>(null);
 
   useEffect(() => {
     // If accessing via URL ID and no initial analysis provided, fetch it
@@ -56,11 +165,12 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
               fileName: report.fileName,
               reportId: report.id
             });
+            setCreatedAt(report.createdAt || null);
           } else {
             setAnalysis({
               status: 'ERROR' as any,
               result: null,
-              error: "Report not found",
+              error: "报告未找到",
               fileName: null
             });
           }
@@ -69,7 +179,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
           setAnalysis({
             status: 'ERROR' as any,
             result: null,
-            error: "Failed to load report",
+            error: "报告加载失败",
             fileName: null
           });
         } finally {
@@ -79,6 +189,44 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       fetchReport();
     }
   }, [id, initialAnalysis]);
+
+  const sections = useMemo(() => splitSections(analysis?.result || ''), [analysis?.result]);
+  const dimensions = useMemo(() => parseDimensions(analysis?.result || ''), [analysis?.result]);
+
+  // Track the currently visible section for TOC highlighting
+  useEffect(() => {
+    if (sections.length === 0 || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        }
+      },
+      { rootMargin: '-80px 0px -70% 0px' }
+    );
+    sections.forEach((s) => {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [sections]);
+
+  const scrollToSection = (sectionId: string) => {
+    // Ensure the target section is expanded before scrolling
+    setCollapsed((prev) => ({ ...prev, [sectionId]: false }));
+    requestAnimationFrame(() => {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const expandAll = () => setCollapsed({});
+  const collapseAll = () => {
+    const next: Record<string, boolean> = {};
+    sections.forEach((s) => { next[s.id] = true; });
+    setCollapsed(next);
+  };
 
   const handleDownloadMd = () => {
     if (!analysis?.result) return;
@@ -96,7 +244,13 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
   const handleDownloadPdf = async () => {
     if (!contentRef.current) return;
     setIsGeneratingPdf(true);
-    
+
+    // Expand all sections so the PDF captures the full report, then restore
+    const prevCollapsed = collapsed;
+    setCollapsed({});
+    // Wait two frames so React commits the expanded layout before capture
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     const element = contentRef.current;
     const opt = {
       margin: [10, 10, 10, 10], // top, left, bottom, right
@@ -111,8 +265,9 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       await html2pdf().set(opt).from(element).save();
     } catch (e) {
       console.error("PDF Generation failed", e);
-      alert("Failed to generate PDF. You can try printing the page.");
+      alert("PDF 生成失败，您可以尝试打印本页面。");
     } finally {
+      setCollapsed(prevCollapsed);
       setIsGeneratingPdf(false);
     }
   };
@@ -120,7 +275,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
   const handleShare = async () => {
     const reportId = analysis?.reportId || id;
     if (!reportId) return;
-    
+
     const url = `${window.location.origin}/report/${reportId}`;
     await navigator.clipboard.writeText(url);
     setCopyingLink(true);
@@ -130,11 +285,11 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
   const handleDelete = async () => {
     const reportId = analysis?.reportId || id;
     if (!reportId) return;
-    
-    if (!window.confirm("Are you sure you want to delete this report?")) return;
+
+    if (!window.confirm("确定要删除这份报告吗？")) return;
 
     try {
-      const res = await fetch(`/api/reports/${reportId}`, { 
+      const res = await fetch(`/api/reports/${reportId}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
@@ -196,23 +351,17 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
     });
   };
 
-  // Extract score from the text if possible
-  const getOverallScore = (text: string) => {
-    const match = text.match(/(?:综合建议|匹配结论)[：:]\s*\*\*?([A-Za-z+-]+)\*\*?/i);
-    return match ? match[1] : 'N/A';
-  };
-
   if (isLoading) {
-    return <div className="text-center py-20 text-slate-500">Loading report...</div>;
+    return <div className="text-center py-20 text-slate-500">报告加载中…</div>;
   }
 
   if (!analysis || analysis.error) {
     return (
       <div className="max-w-xl mx-auto mt-20 text-center">
-        <h3 className="text-xl font-bold text-slate-900">Report Not Found</h3>
-        <p className="text-slate-500 mt-2 mb-6">{analysis?.error || "This report does not exist or has been deleted."}</p>
-        <button onClick={() => navigate('/')} className="text-indigo-600 font-medium hover:underline">
-          Go Home
+        <h3 className="text-xl font-bold text-slate-900">报告未找到</h3>
+        <p className="text-slate-500 mt-2 mb-6">{analysis?.error || "该报告不存在或已被删除。"}</p>
+        <button onClick={() => navigate('/')} className="text-brand-600 font-medium hover:underline">
+          返回首页
         </button>
       </div>
     );
@@ -221,156 +370,256 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
   const score = analysis.result ? getOverallScore(analysis.result) : null;
 
   return (
-    <div className="w-full max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      
-      {/* Header Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <CheckCircle2 className="w-6 h-6 text-green-500" />
-            {id ? 'Assessment Report' : 'Assessment Complete'}
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">
-            Analysis for <span className="font-medium text-slate-700">{analysis.fileName}</span>
-          </p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-3">
-            {onReset && (
-              <button 
-                  onClick={onReset}
-                  className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
-              >
-                  <RefreshCw className="w-4 h-4" />
-                  New Analysis
-              </button>
-            )}
-            
-            {!onReset && (
-              <button 
-                  onClick={() => navigate('/')}
-                  className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
-              >
-                  <RefreshCw className="w-4 h-4" />
-                  New Analysis
-              </button>
-            )}
+    <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+
+      <div className="xl:flex xl:items-start xl:gap-6">
+        {/* Main column, captured for PDF. Toolbar/chips are ignored via data-html2canvas-ignore. */}
+        <div ref={contentRef} className="flex-1 min-w-0">
+
+          {/* Score Hero */}
+          <div className="bg-gradient-to-r from-indigo-500 to-violet-500 rounded-2xl shadow-lg shadow-indigo-500/20 p-6 md:p-8 text-white mb-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="w-5 h-5 text-white/90" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-white/80">
+                    {id ? '评估报告' : '评估完成'}
+                  </span>
+                </div>
+                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">人岗匹配评估</h1>
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/80">
+                  {analysis.fileName && (
+                    <span className="flex items-center gap-1.5">
+                      <FileText className="w-4 h-4" />
+                      {analysis.fileName}
+                    </span>
+                  )}
+                  {createdAt && (
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4" />
+                      {new Date(createdAt).toLocaleString('zh-CN')}
+                    </span>
+                  )}
+                  <span className="text-white/60">由 Bar Raiser AI 生成</span>
+                </div>
+              </div>
+
+              {score && (
+                <div className="bg-white/15 backdrop-blur-sm border border-white/25 rounded-xl px-6 py-4 text-center min-w-[130px] flex-shrink-0">
+                  <div className="text-[11px] uppercase tracking-widest font-bold text-white/70 mb-1">匹配等级</div>
+                  <div className="text-4xl font-black">{score}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action toolbar (excluded from PDF) */}
+          <div className="flex flex-wrap items-center gap-3 mb-6" data-html2canvas-ignore="true">
+            <button
+              onClick={onReset ? onReset : () => navigate('/')}
+              className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              新建分析
+            </button>
 
             <div className="h-6 w-px bg-slate-200 mx-1 hidden md:block"></div>
 
-            <button 
-                onClick={handleShare}
-                className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm relative"
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm relative"
             >
-                <Share2 className="w-4 h-4" />
-                {copyingLink ? 'Copied!' : 'Share'}
+              <Share2 className="w-4 h-4" />
+              {copyingLink ? '已复制！' : '分享'}
             </button>
 
-            <button 
-                onClick={handleDownloadMd}
-                className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            <button
+              onClick={handleDownloadMd}
+              className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
             >
-                <FileDown className="w-4 h-4" />
-                Markdown
+              <FileDown className="w-4 h-4" />
+              导出 Markdown
             </button>
-            <button 
-                onClick={handleDownloadPdf}
-                disabled={isGeneratingPdf}
-                className="flex items-center gap-2 px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait"
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isGeneratingPdf}
+              className="flex items-center gap-2 px-4 py-2 text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-70 disabled:cursor-wait"
             >
-                <Download className="w-4 h-4" />
-                {isGeneratingPdf ? 'Generating...' : 'PDF'}
+              <Download className="w-4 h-4" />
+              {isGeneratingPdf ? '生成中…' : '导出 PDF'}
             </button>
 
             {(analysis.reportId || id) && (
-              <button 
-                  onClick={handleDelete}
-                  className="flex items-center gap-2 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors shadow-sm ml-1"
-                  title="Delete Report"
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-2 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors shadow-sm ml-1"
+                title="删除报告"
               >
-                  <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
-        </div>
-      </div>
+          </div>
 
-      {/* Main Content Area to be captured for PDF */}
-      <div ref={contentRef} className="bg-white rounded-xl shadow-lg border border-slate-100 p-8 md:p-12">
-        
-        {/* Report Header (Visible in PDF) */}
-        <div className="border-b border-slate-200 pb-6 mb-8 flex justify-between items-start">
-            <div>
-                <h1 className="text-3xl font-extrabold text-slate-900">Job Fit Assessment</h1>
-                <p className="text-slate-500 mt-2">Generated by Bar Raiser AI Protocol</p>
+          {/* Dimension score overview (only rendered when dimensions parse successfully) */}
+          {dimensions.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8 mb-6">
+              <h3 className="text-base font-bold text-slate-900 mb-5">胜任力维度评分</h3>
+              <div className="space-y-4">
+                {dimensions.map((dim) => {
+                  const activeIdx = RATING_ORDER.indexOf(dim.score);
+                  return (
+                    <div key={dim.name} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                      <span className="text-sm font-medium text-slate-700 sm:w-48 sm:flex-shrink-0 truncate" title={dim.name}>
+                        {dim.name}
+                      </span>
+                      <div className="flex-1 grid grid-cols-5 gap-1.5">
+                        {RATING_ORDER.map((rating, idx) => {
+                          const isActive = rating === dim.score;
+                          const isFilled = activeIdx !== -1 && idx <= activeIdx;
+                          return (
+                            <div
+                              key={rating}
+                              className={`h-7 rounded-md flex items-center justify-center text-[11px] font-bold transition-all ${
+                                isActive
+                                  ? 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm'
+                                  : isFilled
+                                    ? 'bg-brand-100 text-brand-400'
+                                    : 'bg-slate-100 text-slate-400'
+                              }`}
+                            >
+                              {rating}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            {score && score !== 'N/A' && (
-                <div className={`px-5 py-3 rounded-lg border text-center min-w-[120px]
-                    ${score.includes('H+') || score === 'MH' ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 
-                      score.includes('H') ? 'bg-green-50 border-green-200 text-green-900' :
-                      'bg-amber-50 border-amber-200 text-amber-900'
-                    }
-                `}>
-                     <div className="text-xs uppercase tracking-wider font-bold opacity-70 mb-1">Fit Level</div>
-                     <div className="text-3xl font-black">{score}</div>
-                </div>
-            )}
+          )}
+
+          {/* Section chips below xl (excluded from PDF) */}
+          {sections.length > 0 && (
+            <div className="xl:hidden mb-4 -mx-1 px-1 flex gap-2 overflow-x-auto pb-2" data-html2canvas-ignore="true">
+              {sections.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => scrollToSection(s.id)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    activeSection === s.id
+                      ? 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white border-transparent'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300 hover:text-brand-600'
+                  }`}
+                >
+                  {s.title}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Report body */}
+          {sections.length > 0 ? (
+            <div className="space-y-4">
+              {/* Expand / collapse controls (excluded from PDF) */}
+              <div className="flex justify-end gap-2" data-html2canvas-ignore="true">
+                <button
+                  onClick={expandAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  <ChevronsUpDown className="w-3.5 h-3.5" />
+                  全部展开
+                </button>
+                <button
+                  onClick={collapseAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  <ChevronsDownUp className="w-3.5 h-3.5" />
+                  全部收起
+                </button>
+              </div>
+
+              {sections.map((section) => {
+                const isCollapsed = !!collapsed[section.id];
+                return (
+                  <section
+                    key={section.id}
+                    id={section.id}
+                    className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-6"
+                  >
+                    <button
+                      onClick={() => setCollapsed((prev) => ({ ...prev, [section.id]: !prev[section.id] }))}
+                      className="w-full flex items-center justify-between gap-3 bg-slate-800 px-4 py-2.5 text-left hover:bg-slate-700 transition-colors"
+                    >
+                      <span className="text-base md:text-lg font-bold text-white break-after-avoid">{section.title}</span>
+                      <ChevronDown
+                        className={`w-5 h-5 text-white/70 flex-shrink-0 transition-transform duration-300 ${isCollapsed ? '-rotate-90' : ''}`}
+                      />
+                    </button>
+                    {!isCollapsed && (
+                      <div className="p-6 md:p-8">
+                        <article className="prose prose-slate max-w-none">
+                          <ReactMarkdown components={markdownComponents}>
+                            {section.body}
+                          </ReactMarkdown>
+                        </article>
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
+            // Fallback: structure not recognized, render the whole report in one card
+            <div className="bg-white rounded-xl shadow-lg border border-slate-100 p-8 md:p-12">
+              <article className="prose prose-slate max-w-none">
+                <ReactMarkdown components={markdownComponents}>
+                  {analysis.result || ''}
+                </ReactMarkdown>
+              </article>
+            </div>
+          )}
         </div>
 
-        {/* Custom Markdown Rendering with 4-Level Hierarchy */}
-        <article className="prose prose-slate max-w-none">
-          <ReactMarkdown
-            components={{
-                // Level 1: Main Sections (like "面试综述", "能力维度评估")
-                h2: ({node, ...props}) => (
-                    <h2 className="text-xl font-bold text-white bg-slate-800 px-4 py-2 rounded-lg mt-10 mb-6 flex items-center shadow-sm break-after-avoid" {...props} />
-                ),
-                // Level 2: Dimensions (like "维度一：坚韧抗压")
-                h3: ({node, ...props}) => (
-                    <h3 className="text-lg font-bold text-indigo-700 border-b-2 border-indigo-100 pb-2 mt-8 mb-4 break-after-avoid" {...props} />
-                ),
-                // Level 3: Sub-sections (STAR elements like "S (情境)")
-                h4: ({node, ...props}) => (
-                    <h4 className="text-base font-bold text-slate-800 uppercase tracking-wide bg-slate-50 border-l-4 border-indigo-500 pl-3 py-1 mt-6 mb-2 break-after-avoid" {...props} />
-                ),
-                // Body Text
-                p: ({node, ...props}) => (
-                    <p className="text-slate-600 leading-relaxed mb-4 text-base" {...props} />
-                ),
-                ul: ({node, ...props}) => (
-                    <ul className="list-disc pl-5 space-y-2 mb-4 text-slate-600" {...props} />
-                ),
-                li: ({node, ...props}) => (
-                    <li className="pl-1" {...props} />
-                ),
-                strong: ({node, ...props}) => (
-                    <strong className="font-bold text-slate-900" {...props} />
-                ),
-                blockquote: ({node, ...props}) => (
-                    <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-500 my-4" {...props} />
-                )
-            }}
-          >
-            {analysis.result || ''}
-          </ReactMarkdown>
-        </article>
+        {/* Sticky TOC on xl */}
+        {sections.length > 0 && (
+          <aside className="hidden xl:block w-56 flex-shrink-0 sticky top-6 max-h-[80vh] overflow-y-auto report-scroll">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">报告目录</p>
+            <nav className="space-y-1 border-l border-slate-200">
+              {sections.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => scrollToSection(s.id)}
+                  className={`block w-full text-left pl-3 py-1.5 text-xs leading-snug transition-colors border-l-2 -ml-px ${
+                    activeSection === s.id
+                      ? 'border-brand-500 text-brand-700 font-semibold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {s.title}
+                </button>
+              ))}
+            </nav>
+          </aside>
+        )}
       </div>
-      
+
       {/* Feedback Section */}
       <div className="mt-12 bg-white rounded-xl shadow-lg border border-slate-100 p-8">
-        <h3 className="text-xl font-bold text-slate-900 mb-6">Help Improve Our AI Assessment</h3>
-        
+        <h3 className="text-xl font-bold text-slate-900 mb-6">帮助我们改进 AI 评估</h3>
+
         {feedbackSubmitted ? (
           <div className="text-center py-8">
             <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h4 className="text-lg font-semibold text-slate-900 mb-2">Thank you for your feedback!</h4>
-            <p className="text-slate-500">Your input helps us improve our AI assessment accuracy.</p>
+            <h4 className="text-lg font-semibold text-slate-900 mb-2">感谢您的反馈！</h4>
+            <p className="text-slate-500">您的反馈有助于我们提升 AI 评估的准确性。</p>
           </div>
         ) : (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-3">How accurate was this assessment?</label>
+              <label className="block text-sm font-medium text-slate-700 mb-3">本次评估的准确度如何？</label>
               <div className="flex items-center gap-4">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
@@ -384,9 +633,9 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
                 ))}
               </div>
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Specific issues (select all that apply):</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">具体问题（可多选）：</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {[
                   '评分标准不准确',
@@ -402,7 +651,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
                       id={`issue-${issue}`}
                       checked={feedback.specificIssues.includes(issue)}
                       onChange={() => handleIssueToggle(issue)}
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                     />
                     <label htmlFor={`issue-${issue}`} className="ml-2 block text-sm text-slate-700">
                       {issue}
@@ -411,25 +660,25 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
                 ))}
               </div>
             </div>
-            
+
             <div>
               <label htmlFor="comments" className="block text-sm font-medium text-slate-700 mb-2">
-                Additional comments
+                补充意见
               </label>
               <textarea
                 id="comments"
                 rows={4}
                 value={feedback.comments}
                 onChange={handleCommentChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3"
-                placeholder="Please share any specific feedback to help us improve..."
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring focus:ring-brand-200 focus:ring-opacity-50 p-3"
+                placeholder="请分享任何具体意见，帮助我们改进……"
               />
             </div>
-            
+
             <button
               onClick={handleFeedbackSubmit}
               disabled={isSubmittingFeedback || feedback.rating === 0}
-              className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait flex items-center justify-center gap-2"
+              className="w-full px-6 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-violet-600 transition-all shadow-sm disabled:opacity-70 disabled:cursor-wait flex items-center justify-center gap-2"
             >
               {isSubmittingFeedback ? (
                 <>
@@ -437,10 +686,10 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Submitting...
+                  提交中…
                 </>
               ) : (
-                'Submit Feedback'
+                '提交反馈'
               )}
             </button>
           </div>
@@ -448,7 +697,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       </div>
 
       <div className="text-center mt-8 text-slate-400 text-xs">
-          Confidential • Bar Raiser AI Assessment
+          机密 • Bar Raiser AI 评估
       </div>
     </div>
   );
