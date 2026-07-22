@@ -9,19 +9,21 @@ Bar Raiser AI 是一个面向面试记录分析的人岗匹配工具。它支持
 - **面试材料输入**：支持上传 `.txt`、`.md`、`.pdf`、`.docx` 文件，也支持直接粘贴文本。
 - **人岗匹配分析**：围绕目标岗位、胜任力要求和面试记录生成结构化评估报告。
 - **多模型支持**：通过 `AI_PROVIDER` 在 `gemini` 和 `doubao` 之间切换。
-- **登录与权限**：支持账号登录和飞书 OAuth 登录；普通用户只能访问自己的报告，管理员可查看全量报告和反馈。
+- **登录与权限**：支持用户名密码注册和登录；普通用户只能访问自己的报告，管理员可查看全量报告和反馈。
 - **报告管理**：支持查看历史报告、复制分享链接、删除报告，并导出 Markdown 或 PDF。
 - **反馈闭环**：用户可对报告评分并提交问题反馈；管理员可查看反馈并用于 Prompt 迭代。
-- **服务端密钥管理**：AI Key 和飞书凭证只在服务端读取，不暴露给浏览器端代码。
+- **服务端密钥管理**：AI Key 只在服务端读取，不暴露给浏览器端代码。
 
 ## 技术栈
 
 - 前端：React、TypeScript、Vite、React Router、Tailwind CDN、lucide-react
 - 后端：Node.js ESM、Express
 - AI 服务：Google Gemini 或豆包 Ark
-- 存储：本地 JSON 文件，运行时数据位于 `data/`
+- 存储：SQLite（Node 内置 `node:sqlite`），数据库文件 `data/app.db`
 
 ## 本地运行
+
+要求 Node.js ≥ 22（后端使用内置 `node:sqlite` 模块）。
 
 ### 1. 安装依赖
 
@@ -31,7 +33,7 @@ npm install
 
 ### 2. 配置环境变量
 
-在项目根目录创建 `.env.local`，按需填写 AI 服务和飞书 OAuth 配置。
+在项目根目录创建 `.env.local`，按需填写 AI 服务配置。
 
 ```env
 # AI Provider: gemini 或 doubao
@@ -51,8 +53,6 @@ DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 # 服务端口
 PORT=3000
 ```
-
-如需启用飞书 OAuth，请补充飞书应用相关环境变量，并参考 `FEISHU_OAUTH_SETUP.md`。
 
 ### 3. 启动开发环境
 
@@ -98,12 +98,12 @@ docker run -p 3000:3000 \
 ├── components/              # 业务页面和可复用组件
 ├── src/context/             # 认证状态等 React Context
 ├── services/*.ts            # 前端 API 调用和浏览器侧工具
-├── services/*.js            # 后端服务模块
+├── services/*.js            # 后端服务模块（含 db.js：SQLite 连接与建表）
+├── scripts/                 # 开发启动和一次性数据迁移脚本
 ├── server.js                # Express 入口和 API 路由
-├── data/                    # 本地运行时数据，不应提交真实内容
+├── data/                    # 本地运行时数据（app.db 等），不应提交真实内容
 ├── dist/                    # 前端构建产物
-├── Dockerfile               # 容器构建配置
-└── FEISHU_OAUTH_SETUP.md    # 飞书 OAuth 配置说明
+└── Dockerfile               # 容器构建配置
 ```
 
 ## 常用命令
@@ -119,5 +119,5 @@ npm run preview  # 预览 Vite 构建结果
 
 - `.env.local`、`.env` 和任何真实密钥文件不应提交到仓库。
 - `.env.production` 当前作为生产配置模板维护；不要写入真实密钥。
-- `data/` 下的 JSON 文件可能包含用户、报告、反馈或候选人材料，仅用于本地运行和部署持久化。
-- 当前本地 JSON 存储适合 MVP；如果用于多人生产、审计或高并发场景，应先设计数据库、权限审计和数据迁移方案。
+- `data/app.db` 可能包含用户密码哈希、会话 token、报告、反馈和候选人材料，仅用于本地运行和部署持久化。
+- 历史 JSON 存储已由 `scripts/migrate-to-sqlite.mjs` 一次性迁移到 SQLite；`data/*.migrated.bak` 是迁移备份，同样不要提交。

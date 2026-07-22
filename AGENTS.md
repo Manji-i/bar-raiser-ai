@@ -18,7 +18,7 @@
 - `src/context/`：React context，例如认证状态。
 - `src/components/`：当前只放登录页相关组件；新增前先判断是否应归入根目录 `components/`。
 - `services/*.ts`：前端调用或浏览器侧工具，例如 API client、文件解析。
-- `services/*.js`：后端服务模块，例如用户、报告、Prompt、飞书。
+- `services/*.js`：后端服务模块，例如用户、报告、Prompt、数据库连接（`db.js`）。
 - `server.js`：Express 入口、API 路由和静态资源托管。
 - `data/`：运行时数据目录，只做本地运行和部署持久化，不提交。
 - `dist/`、`node_modules/`：生成物和依赖目录，不手改、不提交。
@@ -28,7 +28,7 @@
 
 - 不读取、不打印、不提交 `.env.local`、`.env` 或任何真实密钥文件。
 - `.env.production` 当前作为仓库模板文件存在；不要读取其内容，修改前必须先确认，且不得写入真实密钥。
-- 不把 API Key、token、密码、飞书凭证、候选人面试原文写入代码、日志、提交信息或文档。
+- 不把 API Key、token、密码、候选人面试原文写入代码、日志、提交信息或文档。
 - `data/app.db` 包含密码哈希、会话 token（`users`/`tokens` 表）和候选人材料（`reports`/`feedback` 表）。默认只查看表结构和行数，不展开内容。
 - `data/*.migrated.bak` 是 JSON 存储时代的迁移备份，同样按敏感数据处理。
 - 修改 `.env*`、密钥、token、部署环境变量前必须先停下来确认。
@@ -52,6 +52,7 @@
 
 ## 运行和验证
 
+- 运行环境要求 Node.js ≥ 22（后端依赖内置 `node:sqlite`）。
 - 安装依赖：`npm install`
 - 本地开发：`npm run dev`
 - 生产构建：`npm run build`
