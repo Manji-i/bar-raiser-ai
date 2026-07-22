@@ -107,7 +107,7 @@ const HistoryView: React.FC = () => {
       <div className="flex items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-slate-900">评估历史记录</h1>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/app')}
           className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg text-sm font-medium hover:from-indigo-600 hover:to-violet-600 transition-all shadow-sm"
         >
           <PlusCircle className="w-4 h-4" />
@@ -143,7 +143,7 @@ const HistoryView: React.FC = () => {
           <h3 className="text-lg font-medium text-slate-900">暂无报告</h3>
           <p className="text-slate-500 mt-2 mb-6">新建分析后，历史记录将显示在这里。</p>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/app')}
             className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-violet-600 transition-all"
           >
             新建分析

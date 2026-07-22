@@ -295,7 +295,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       });
       if (res.ok) {
         if (onReset) onReset();
-        else navigate('/');
+        else navigate('/app');
       }
     } catch (e) {
       console.error("Failed to delete", e);
@@ -360,8 +360,8 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       <div className="max-w-xl mx-auto mt-20 text-center">
         <h3 className="text-xl font-bold text-slate-900">报告未找到</h3>
         <p className="text-slate-500 mt-2 mb-6">{analysis?.error || "该报告不存在或已被删除。"}</p>
-        <button onClick={() => navigate('/')} className="text-brand-600 font-medium hover:underline">
-          返回首页
+        <button onClick={() => navigate('/app')} className="text-brand-600 font-medium hover:underline">
+          返回新建分析
         </button>
       </div>
     );
@@ -416,7 +416,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
           {/* Action toolbar (excluded from PDF) */}
           <div className="flex flex-wrap items-center gap-3 mb-6" data-html2canvas-ignore="true">
             <button
-              onClick={onReset ? onReset : () => navigate('/')}
+              onClick={onReset ? onReset : () => navigate('/app')}
               className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
             >
               <RefreshCw className="w-4 h-4" />

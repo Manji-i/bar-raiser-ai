@@ -14,10 +14,10 @@ const LoginPage: React.FC = () => {
   const { login, register, user } = useAuth();
   const navigate = useNavigate();
 
-  // 如果已经登录，重定向到首页
+  // 如果已经登录，重定向到主应用
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate('/app');
     }
   }, [user, navigate]);
 
@@ -32,7 +32,7 @@ const LoginPage: React.FC = () => {
       } else {
         await register(username, password, email || undefined);
       }
-      navigate('/');
+      navigate('/app');
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败，请稍后重试');
     } finally {

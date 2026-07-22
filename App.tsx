@@ -7,6 +7,7 @@ import ReportView from './components/ReportView';
 import HistoryView from './components/HistoryView';
 import AdminView from './components/AdminView';
 import LoginPage from './src/components/LoginPage';
+import LandingPage from './components/LandingPage';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import {
   BrainCircuit, History, PlusCircle, Settings, LogOut, User, Menu, X,
@@ -26,7 +27,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
@@ -45,7 +46,7 @@ const LoginRoute: React.FC = () => {
   }
 
   if (user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return <LoginPage />;
@@ -64,7 +65,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   if (!user || !user.isAdmin) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return <>{children}</>;
@@ -78,7 +79,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: '新建分析', path: '/', icon: PlusCircle },
+  { label: '新建分析', path: '/app', icon: PlusCircle },
   { label: '历史记录', path: '/history', icon: History },
 ];
 
@@ -103,7 +104,7 @@ const TopNav: React.FC = () => {
   }
 
   const isActive = (path: string) =>
-    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
+    path === '/app' ? location.pathname === '/app' : location.pathname.startsWith(path);
 
   const go = (path: string) => {
     navigate(path);
@@ -114,7 +115,7 @@ const TopNav: React.FC = () => {
     <header className="sticky top-0 z-30 bg-slate-900 text-slate-300 shadow-lg shadow-slate-900/10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 cursor-pointer flex-shrink-0" onClick={() => go('/')}>
+        <div className="flex items-center gap-2.5 cursor-pointer flex-shrink-0" onClick={() => go('/app')}>
           <div className="bg-gradient-to-br from-indigo-500 to-violet-500 p-1.5 rounded-lg text-white shadow-lg shadow-indigo-500/20">
             <BrainCircuit className="w-5 h-5" />
           </div>
@@ -368,16 +369,19 @@ const AppContent: React.FC = () => {
       error: null,
       fileName: null,
     });
-    navigate('/');
+    navigate('/app');
   };
 
   return (
     <Routes>
+      {/* 产品首页（公开） */}
+      <Route path="/" element={<LandingPage />} />
+
       {/* 登录页面 */}
       <Route path="/login" element={<LoginRoute />} />
 
       {/* 受保护的路由 */}
-      <Route path="/" element={
+      <Route path="/app" element={
         <ProtectedRoute>
           <AppShell>
             {analysisState.status === AnalysisStatus.IDLE && (
