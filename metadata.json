@@ -1,4 +1,4 @@
 {
-  "name": "Bar Raiser AI",
+  "name": "Eval Bar AI",
   "description": "A professional structured interview analysis tool. It analyzes interview transcripts using the STAR method to provide evidence-based hiring recommendations, with switchable AI providers (Doubao Ark / Gemini)."
 }

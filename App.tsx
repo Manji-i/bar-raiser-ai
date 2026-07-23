@@ -120,7 +120,7 @@ const TopNav: React.FC = () => {
             <BrainCircuit className="w-5 h-5" />
           </div>
           <h1 className="text-lg font-bold text-white tracking-tight">
-            Bar Raiser <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">AI</span>
+            Eval Bar <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">AI</span>
           </h1>
         </div>
 

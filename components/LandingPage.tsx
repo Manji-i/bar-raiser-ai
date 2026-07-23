@@ -107,7 +107,7 @@ const LandingPage: React.FC = () => {
               <BrainCircuit className="w-5 h-5" />
             </div>
             <h1 className="text-lg font-bold text-white tracking-tight">
-              Bar Raiser{' '}
+              Eval Bar{' '}
               <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
                 AI
               </span>
@@ -160,7 +160,7 @@ const LandingPage: React.FC = () => {
             </Reveal>
             <Reveal delay={200}>
               <p className="mt-6 text-base md:text-lg text-slate-400 leading-relaxed max-w-xl">
-                上传面试记录，Bar Raiser AI 将基于 STAR 法则分析候选人的行为证据，
+                上传面试记录，Eval Bar AI 将基于 STAR 法则分析候选人的行为证据，
                 结合岗位胜任力进行人岗匹配，生成专业、可追溯的录用建议——
                 帮你把招聘标准抬得更高。
               </p>
@@ -335,7 +335,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <BrainCircuit className="w-4 h-4 text-indigo-400" />
-            Bar Raiser AI — 面试记录分析与人岗匹配工具
+            Eval Bar AI — 面试记录分析与人岗匹配工具
           </div>
           <div className="flex items-center gap-1.5 text-xs text-slate-600">
             <MessageSquareQuote className="w-3.5 h-3.5" />

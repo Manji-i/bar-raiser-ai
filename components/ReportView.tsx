@@ -254,7 +254,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
     const element = contentRef.current;
     const opt = {
       margin: [10, 10, 10, 10], // top, left, bottom, right
-      filename: `BarRaiser_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
+      filename: `EvalBar_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, logging: false },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
@@ -400,7 +400,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
                       {new Date(createdAt).toLocaleString('zh-CN')}
                     </span>
                   )}
-                  <span className="text-white/60">由 Bar Raiser AI 生成</span>
+                  <span className="text-white/60">由 Eval Bar AI 生成</span>
                 </div>
               </div>
 
@@ -697,7 +697,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       </div>
 
       <div className="text-center mt-8 text-slate-400 text-xs">
-          机密 • Bar Raiser AI 评估
+          机密 • Eval Bar AI 评估
       </div>
     </div>
   );
