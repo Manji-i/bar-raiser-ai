@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../src/context/AuthContext';
+import SampleReportSection from './SampleReportSection';
 import {
   BrainCircuit, LogIn, ArrowRight, UploadCloud, ScanSearch, FileBarChart,
   Crosshair, Sparkles, History, MessageSquareQuote, Check,
@@ -308,6 +309,9 @@ const LandingPage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* 脱敏示例报告 */}
+      <SampleReportSection />
 
       {/* 底部 CTA */}
       <section className="bg-slate-900 py-20">
