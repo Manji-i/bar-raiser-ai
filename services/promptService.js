@@ -1,6 +1,8 @@
 import { db } from './db.js';
+import { normalizeAnalysisMode } from './analysisRequest.js';
+import { DEFAULT_CANDIDATE_PROMPT_CONTENT } from './candidatePrompt.js';
 
-const DEFAULT_PROMPT_CONTENT = `
+export const DEFAULT_PROMPT_CONTENT = `
 <role_definition>
 你是一位拥有 15 年以上经验的资深招聘专家（Talent Acquisition Partner），精通人才盘点与人岗匹配。
 你的核心任务不再仅仅是评估“候选人有多强”，而是评估“候选人是否适合【目标岗位】”。
@@ -102,16 +104,18 @@ const DEFAULT_PROMPT_CONTENT = `
 </output_template>
       `;
 
-// 初始化系统提示：表为空时写入默认版本
-const initializePrompt = () => {
-  const row = db.prepare('SELECT COUNT(*) AS count FROM system_prompt').get();
+const promptTable = (mode) => normalizeAnalysisMode(mode) === 'candidate'
+  ? 'candidate_system_prompt'
+  : 'system_prompt';
+
+// 初始化系统提示：各模式表为空时写入默认版本。
+const initializePrompt = (database, table, content) => {
+  const row = database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get();
   if (row.count === 0) {
-    db.prepare('INSERT INTO system_prompt (version, content, updated_at) VALUES (?, ?, ?)')
-      .run(1, DEFAULT_PROMPT_CONTENT, new Date().toISOString());
+    database.prepare(`INSERT INTO ${table} (version, content, updated_at) VALUES (?, ?, ?)`)
+      .run(1, content, new Date().toISOString());
   }
 };
-
-initializePrompt();
 
 const toFeedback = (row) => ({
   id: row.id,
@@ -127,17 +131,21 @@ const toFeedback = (row) => ({
   createdAt: row.created_at
 });
 
-// 导出服务
-export const promptService = {
+export const createPromptService = (database) => {
+  initializePrompt(database, 'system_prompt', DEFAULT_PROMPT_CONTENT);
+  initializePrompt(database, 'candidate_system_prompt', DEFAULT_CANDIDATE_PROMPT_CONTENT);
+
+  const service = {
   // 获取当前系统提示
-  getCurrentPrompt: () => {
-    const row = db.prepare('SELECT version, content FROM system_prompt ORDER BY version DESC LIMIT 1').get();
+  getCurrentPrompt: (mode = 'recruiter') => {
+    const table = promptTable(mode);
+    const row = database.prepare(`SELECT version, content FROM ${table} ORDER BY version DESC LIMIT 1`).get();
     return { version: row.version, content: row.content };
   },
 
   // 保存反馈
   saveFeedback: (feedback, report = null) => {
-    db.prepare(`
+    database.prepare(`
       INSERT INTO feedback (id, report_id, rating, comments, specific_issues, job_title, competencies, file_name, transcript, assessment_result, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -158,14 +166,14 @@ export const promptService = {
 
   // 获取所有反馈，按时间倒序排列
   getAllFeedback: () => {
-    const rows = db.prepare('SELECT * FROM feedback ORDER BY created_at DESC').all();
+    const rows = database.prepare('SELECT * FROM feedback ORDER BY created_at DESC').all();
     return rows.map(toFeedback);
   },
 
   // 基于反馈迭代系统提示
   iteratePrompt: (feedbackSummary) => {
-    const currentPrompt = promptService.getCurrentPrompt();
-    const feedbacks = promptService.getAllFeedback();
+    const currentPrompt = service.getCurrentPrompt('recruiter');
+    const feedbacks = service.getAllFeedback();
 
     // 如果没有提供手动总结，自动生成一个
     let finalSummary = feedbackSummary;
@@ -184,23 +192,27 @@ ${finalSummary}
 `
     };
 
-    db.prepare('INSERT INTO system_prompt (version, content, updated_at) VALUES (?, ?, ?)')
+    database.prepare('INSERT INTO system_prompt (version, content, updated_at) VALUES (?, ?, ?)')
       .run(newPrompt.version, newPrompt.content, new Date().toISOString());
     return newPrompt;
   },
 
   // 直接更新系统提示内容（版本 +1）
-  updatePrompt: (content) => {
-    const currentPrompt = promptService.getCurrentPrompt();
+  updatePrompt: (content, mode = 'recruiter') => {
+    const table = promptTable(mode);
+    const currentPrompt = service.getCurrentPrompt(mode);
     const newPrompt = {
       version: currentPrompt.version + 1,
       content
     };
 
-    db.prepare('INSERT INTO system_prompt (version, content, updated_at) VALUES (?, ?, ?)')
+    database.prepare(`INSERT INTO ${table} (version, content, updated_at) VALUES (?, ?, ?)`)
       .run(newPrompt.version, newPrompt.content, new Date().toISOString());
     return newPrompt;
   }
+  };
+
+  return service;
 };
 
 // 自动生成反馈总结 - 作为独立函数
@@ -243,3 +255,5 @@ const generateFeedbackSummary = (feedbacks) => {
 
     return summary;
   };
+
+export const promptService = createPromptService(db);
