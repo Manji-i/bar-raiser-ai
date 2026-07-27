@@ -28,6 +28,29 @@ export interface FileData {
   type: string;
 }
 
+export type ResumeParseStatus = 'usable' | 'low_quality' | 'empty' | 'manual' | 'not_provided';
+
+export interface CandidateAnalysisInput {
+  analysisMode: 'candidate';
+  jobTitle: string;
+  jobDescription: string;
+  transcript: string;
+  fileName: string;
+  resumeFile: File | null;
+  resumeText: string;
+  resumeParseStatus: ResumeParseStatus;
+}
+
+export interface RecruiterAnalysisInput {
+  analysisMode: 'recruiter';
+  jobTitle: string;
+  competencies: string;
+  transcript: string;
+  fileName: string;
+}
+
+export type AnalysisInput = CandidateAnalysisInput | RecruiterAnalysisInput;
+
 export interface Report {
   id: string;
   jobTitle: string;
