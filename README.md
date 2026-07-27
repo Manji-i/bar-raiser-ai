@@ -82,15 +82,17 @@ npm start
 ### Docker 部署
 
 ```bash
+mkdir -p data
 docker build -t bar-raiser-ai .
 docker run -p 3000:3000 \
+  -v "$(pwd)/data:/app/data" \
   -e AI_PROVIDER=doubao \
   -e DOUBAO_API_KEY=your_key \
   -e DOUBAO_MODEL=doubao-seed-2-1-pro-260628 \
   bar-raiser-ai
 ```
 
-部署到火山引擎 VCI、VKE 或其他容器平台时，需要在容器环境变量中配置 `AI_PROVIDER`、`DOUBAO_API_KEY`、`DOUBAO_MODEL` 等必要参数（旧版 `DOUBAO_ENDPOINT_ID` 仍兼容），并暴露 3000 端口。
+部署到火山引擎 VCI、VKE 或其他容器平台时，需要在容器环境变量中配置 `AI_PROVIDER`、`DOUBAO_API_KEY`、`DOUBAO_MODEL` 等必要参数（旧版 `DOUBAO_ENDPOINT_ID` 仍兼容），暴露 3000 端口，并为 `/app/data` 挂载持久化存储。否则容器重建会丢失用户、报告和简历源文件。
 
 ## 项目结构
 
@@ -113,10 +115,19 @@ docker run -p 3000:3000 \
 
 ```bash
 npm run dev      # 同时启动前端 Vite 和后端 Express 开发服务
+npm test         # 运行 Node.js 内置测试套件
 npm run build    # 构建生产前端资源
 npm start        # 启动生产服务
 npm run preview  # 预览 Vite 构建结果
 ```
+
+## 项目文档
+
+- [架构说明](docs/architecture.md)：双模式数据流、路由、模块和数据模型。
+- [接口接入指南](docs/integration-guide.md)：认证、分析、报告、简历附件和 Prompt API。
+- [运维手册](docs/operator-runbook.md)：生产冒烟、数据保护和故障定位。
+- [部署指南](DEPLOYMENT.md)：PM2、Bundle、Docker 和持久化部署。
+- [当前交接状态](docs/handoff.md)：已交付范围、验证结果和剩余风险。
 
 ## 数据与安全说明
 

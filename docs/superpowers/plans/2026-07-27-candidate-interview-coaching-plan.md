@@ -4,6 +4,8 @@
 
 **Goal:** 在不改变现有招聘方评估行为的前提下，交付从公共首页入口、候选人材料上传、独立 AI Prompt 到候选人报告与历史记录的完整「提升自己」模式。
 
+**Execution status (2026-07-27):** 核心功能已实现并部署。自动化测试 24/24 通过，生产构建和线上首页/路由/权限冒烟通过；尚未在生产环境创建合成账号并发起真实 AI 分析，因此 Task 10 中涉及真实模型请求、跨账号附件权限和报告删除的生产级端到端步骤仍保留为后续验收项。本文保留为实施记录，当前事实以 `docs/handoff.md` 为准。
+
 **Architecture:** 继续使用同一个 React/Express 应用和 `/api/analyze` 接口，以 `candidate/recruiter` 模式分流。候选人简历在浏览器提取文本并检测质量，源文件由受保护的服务端附件存储保存；Candidate Prompt、报告结构和历史查询独立，旧报告默认视为 Recruiter。当前工作区有与前端目标文件重叠的未提交改动，执行时必须逐文件保留，禁止 `git add -A`。
 
 **Tech Stack:** React 19、TypeScript、React Router 7、Vite、Tailwind CDN、Node.js 22 ESM、Express 5、SQLite `node:sqlite`、Multer、Google Gemini / 豆包 Ark、Node `node:test`。
@@ -759,7 +761,7 @@ document.getElementById('recruiter-intro')?.scrollIntoView({ behavior: 'smooth',
 
 - [ ] **Step 5: 实现显式和兼容路由**
 
-增加 `/app/:mode`、`/history/:mode`；模式参数非法时重定向 `/app/recruiter`。`/app`、`/history` 根据最近模式重定向。未登录保护路由继续重定向 `/`。TopNav 的新建和历史链接使用当前模式。
+增加 `/app/:mode`、`/history/:mode`；模式参数非法时重定向 `/app/recruiter`。`/app`、`/history` 根据上次使用的模式重定向。未登录保护路由继续重定向 `/`。TopNav 的新建和历史链接使用当前模式。
 
 - [ ] **Step 6: 实现桌面和移动模式切换**
 

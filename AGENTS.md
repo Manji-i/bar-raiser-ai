@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-这是一个面向面试记录分析的人岗匹配工具。前端负责上传/粘贴面试材料、展示报告和收集反馈；后端负责认证、AI 调用、报告存储和 Prompt 管理。
+这是一个面向面试记录分析的双模式工具：候选人使用“提升自己”复盘面试表现，招聘方使用“判断他人”评估人岗匹配。前端负责材料输入、模式化报告与反馈；后端负责认证、AI 调用、报告/附件存储和两套 Prompt 管理。
 
 ## 技术栈
 
@@ -15,12 +15,13 @@
 
 - `App.tsx`、`index.tsx`：当前前端入口和主路由，不随意迁移。
 - `components/`：业务页面和可复用组件。新增主业务组件优先放这里。
+- `components/ui.tsx`：共享视觉基元；新增通用按钮、输入框、卡片或评分徽章前先判断是否应沉淀到这里。
 - `src/context/`：React context，例如认证状态。
 - `src/components/`：当前只放登录页相关组件；新增前先判断是否应归入根目录 `components/`。
 - `services/*.ts`：前端调用或浏览器侧工具，例如 API client、文件解析。
 - `services/*.js`：后端服务模块，例如用户、报告、Prompt、数据库连接（`db.js`）。
 - `server.js`：Express 入口、API 路由和静态资源托管。
-- `data/`：运行时数据目录，只做本地运行和部署持久化，不提交。
+- `data/`：运行时数据目录，包含 SQLite 与 `uploads/resumes/` 简历源文件，只做本地运行和部署持久化，不提交。
 - `dist/`、`node_modules/`：生成物和依赖目录，不手改、不提交。
 - `.trae/`：工具技能目录，除非明确处理工具配置，否则不要纳入业务改动。
 
@@ -29,7 +30,8 @@
 - 不读取、不打印、不提交 `.env.local`、`.env` 或任何真实密钥文件。
 - `.env.production` 当前作为仓库模板文件存在；不要读取其内容，修改前必须先确认，且不得写入真实密钥。
 - 不把 API Key、token、密码、候选人面试原文写入代码、日志、提交信息或文档。
-- `data/app.db` 包含密码哈希、会话 token（`users`/`tokens` 表）和候选人材料（`reports`/`feedback` 表）。默认只查看表结构和行数，不展开内容。
+- `data/app.db` 包含密码哈希、会话 token（`users`/`tokens` 表）和候选人材料（`reports`/`feedback`/`report_attachments` 表）。默认只查看表结构和行数，不展开内容。
+- `data/uploads/resumes/` 保存候选人简历源文件；不得读取正文、复制到静态目录或绕过 `/api/reports/:id/resume` 权限接口访问。
 - `data/*.migrated.bak` 是 JSON 存储时代的迁移备份，同样按敏感数据处理。
 - 修改 `.env*`、密钥、token、部署环境变量前必须先停下来确认。
 
@@ -55,9 +57,10 @@
 - 运行环境要求 Node.js ≥ 22（后端依赖内置 `node:sqlite`）。
 - 安装依赖：`npm install`
 - 本地开发：`npm run dev`
+- 自动化测试：`npm test`
 - 生产构建：`npm run build`
 - 本地生产启动：`npm start`
-- 当前项目没有专门的自动化测试脚本。代码改动后至少运行 `npm run build`；涉及后端路由或认证时，还要启动服务做接口或页面验证。
+- 代码改动后至少运行 `npm test && npm run build`；涉及后端路由、认证、上传或附件权限时，还要启动服务做接口或页面验证。
 - 文档类改动至少检查文件存在、格式和关键内容；不需要因为纯文档改动重建前端。
 
 ## 部署注意
@@ -72,14 +75,26 @@
 ## 前端路由
 
 - `/`：公开产品首页（`components/LandingPage.tsx`），无需登录；已登录用户看到的是"进入应用"入口。
-- `/app`：主应用（新建分析），受保护；`/history`、`/report/:id`、`/admin` 同样受保护，未登录统一重定向到 `/`。
-- 登录成功或已登录访问 `/login` 重定向到 `/app`。
-- 应用内"返回/新建分析"类跳转的目标是 `/app`，不要写回 `/`。
+- `/app/candidate`、`/app/recruiter`：候选人复盘与招聘评估工作台，受保护。
+- `/history/candidate`、`/history/recruiter`：两种模式独立历史；不得混排或给 Candidate 报告显示招聘评分。
+- `/app`、`/history`：兼容入口，根据上次使用的模式重定向；无记录时默认 `recruiter`。
+- `/report/:id`：按报告自身 `analysisMode` 渲染；`/admin`：管理员后台。未登录访问受保护路由统一重定向到 `/`。
+- 登录成功或已登录访问 `/login` 时优先恢复待跳转模式。应用内返回/新建分析必须回到当前模式的 `/app/<mode>`，不要写回 `/`。
 
 ## 代码注意点
 
 - 认证统一使用 `Authorization: Bearer <token>`。
 - 普通用户只能访问自己的报告；管理员入口需要后端权限校验。
 - Prompt 相关接口属于高权限能力，新增或调整时必须考虑认证和管理员限制。
+- Recruiter 与 Candidate Prompt 分别存于 `system_prompt` 和 `candidate_system_prompt`；Candidate 首版禁止复用 Recruiter 的反馈自动迭代。
 - 文件解析在浏览器侧完成，PDF worker 配置变化要实际上传 PDF 验证。
+- 简历仅允许 PDF、DOCX、TXT，最大 10 MB；浏览器解析失败仍可保存合法源文件并人工补充文本，低质量文本不得直接进入模型输入。
 - 存储已迁移到 SQLite（`node:sqlite`）。历史 JSON 文件由 `scripts/migrate-to-sqlite.mjs` 一次性导入（幂等，users 表非空则跳过），不要再写回 JSON 存储。
+
+## 深入文档
+
+- `docs/architecture.md`：双模式数据流、路由、模块和数据模型。
+- `docs/integration-guide.md`：认证、分析、报告、附件和 Prompt API 用法。
+- `docs/operator-runbook.md`：生产冒烟、数据保护和故障定位。
+- `DEPLOYMENT.md`：标准部署与 Bundle 部署步骤。
+- `docs/handoff.md`：当前已交付能力、验证边界和后续事项。

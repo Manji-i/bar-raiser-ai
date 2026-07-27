@@ -34,33 +34,45 @@ curl -sS -I http://127.0.0.1:3000/
 
 ## Bundle 部署路径
 
-适用于服务器拉 GitHub 失败或卡住的情况。在本机项目目录执行：
+适用于服务器拉 GitHub 失败、卡住，或本地 `main` 已确认但尚未推送 GitHub 的情况。先确认本地 `main` 是本次要部署的唯一来源：
 
 ```bash
 git status -sb
-git push origin main
-git bundle create /private/tmp/bar-raiser-ai-main.bundle origin/main
+git rev-parse --short main
+git log --oneline --left-right main...origin/main
+git bundle create /private/tmp/bar-raiser-ai-main.bundle main
+git bundle verify /private/tmp/bar-raiser-ai-main.bundle
 scp /private/tmp/bar-raiser-ai-main.bundle root@14.103.45.4:/tmp/bar-raiser-ai-main.bundle
 ```
 
-然后在服务器执行：
+服务器合并前先备份 SQLite。简历源文件已经存在时，备份必须同时覆盖整个 `data/`；下面用受限目录保存完整数据副本：
 
 ```bash
 cd /root/bar-raiser-ai-new/bar-raiser-ai
-git fetch /tmp/bar-raiser-ai-main.bundle refs/remotes/origin/main
+umask 077
+mkdir -p /root/bar-raiser-ai-backups
+cp -a data "/root/bar-raiser-ai-backups/data-before-$(date +%Y%m%d-%H%M%S)"
+git bundle verify /tmp/bar-raiser-ai-main.bundle
+git fetch /tmp/bar-raiser-ai-main.bundle main
 git merge --ff-only FETCH_HEAD
-git update-ref refs/remotes/origin/main HEAD
 npm install
 npm run build
 pm2 restart bar-raiser-ai --update-env
 pm2 save
 ```
 
+只有 GitHub 的 `origin/main` 已经真实推送到同一个提交时，才能更新服务器的 `refs/remotes/origin/main`。如果 Bundle 来自尚未推送的本地 `main`，服务器显示 `main...origin/main [ahead N]` 是正确状态，不要伪造远端引用。
+
 验证线上资源是否更新：
 
 ```bash
+pm2 status bar-raiser-ai
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/
+curl -sS -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:3000/api/reports?analysisMode=candidate'
 curl -sS -L http://14.103.45.4:3000/ | grep -o '/assets/index-[A-Za-z0-9_-]*\.js'
 ```
+
+预期首页为 `200`，未认证报告接口为 `401`，PM2 为 `online`。数据库结构检查和更完整的冒烟步骤见 `docs/operator-runbook.md`。
 
 ## Docker 部署
 

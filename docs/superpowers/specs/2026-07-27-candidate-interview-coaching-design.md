@@ -1,6 +1,6 @@
 # 「提升自己」候选人面试复盘设计规格
 
-- 状态：已完成产品设计，待规格复核
+- 状态：已实现并于 2026-07-27 部署；本文作为设计决策记录保留
 - 日期：2026-07-27
 - 适用项目：Eval Bar AI
 
@@ -22,7 +22,7 @@
 
 模式枚举统一使用 `candidate` 和 `recruiter`。原型中的 `employer` 只作为早期演示值，不进入正式接口、数据库或前端状态。
 
-公共首页 UX 以 `.superpowers/brainstorm/50501-1785137511/content/current-homepage-design-republished.html` 为基线：Hero 中的两个角色入口只负责平滑滚动到对应介绍区，介绍区 CTA 才进入登录或应用；登录后记住最近模式，应用顶部可以随时切换。正式实现继续使用当前项目的 Slate 深色背景、Indigo/Violet 渐变、白色内容卡片、圆角、阴影和 Lucide 图标，不把原型内联样式直接复制进生产组件。
+公共首页 UX 以 `.superpowers/brainstorm/50501-1785137511/content/current-homepage-design-republished.html` 为基线：Hero 中的两个角色入口只负责平滑滚动到对应介绍区，介绍区 CTA 才进入登录或应用；登录后记住上次使用的模式，应用顶部可以随时切换。正式实现继续使用当前项目的 Slate 深色背景、Indigo/Violet 渐变、白色内容卡片、圆角、阴影和 Lucide 图标，不把原型内联样式直接复制进生产组件。
 
 ## 3. 用户输入与流程
 
@@ -38,7 +38,7 @@
 - 主标题：`一场面试，看清两种答案`。
 - 说明：同一份面试记录既可以帮助求职者复盘自己，也可以帮助招聘方判断人岗匹配。
 - 提供两个并列角色入口：`提升自己` 和 `判断他人`。
-- 点击角色入口只平滑滚动到页面内的 `#candidate-intro` 或 `#recruiter-intro`，不立即触发登录，也不写入最近模式。
+- 点击角色入口只平滑滚动到页面内的 `#candidate-intro` 或 `#recruiter-intro`，不立即触发登录，也不写入上次使用模式。
 - 桌面端两个入口并列，移动端纵向排列；使用真实 `<button>`，保留键盘焦点样式和可访问名称。
 
 #### 「提升自己」介绍区
@@ -62,7 +62,7 @@
 - 未登录：把目标路径写入 `sessionStorage` 的 `evalbar_post_login_path`，再进入 `/login`。
 - 已登录：直接进入对应的 `/app/candidate` 或 `/app/recruiter`。
 - 只有点击介绍区 CTA 或应用内模式切换时，才把模式写入 `localStorage` 的 `evalbar_analysis_mode`。
-- 页面底部提供公共 CTA：默认继续最近使用的模式；没有历史模式时默认 `recruiter`，同时提供重新选择入口回到 Hero。
+- 页面底部提供公共 CTA：默认继续上次使用的模式；没有历史模式时默认 `recruiter`，同时提供重新选择入口回到 Hero。
 - 首页和上传页不得继续使用“材料不出本机”这类不准确表述。统一说明为：文件正文先在浏览器解析，提交分析后相关文本会发送给配置的 AI 服务；候选人选择保存简历时，源文件和解析文本会保存在服务器的受保护目录。
 
 ### 3.2 登录衔接与兼容路由
@@ -70,7 +70,7 @@
 - 登录成功后优先读取并清除 `evalbar_post_login_path`，再跳转到目标模式。
 - 没有待跳转路径时读取 `evalbar_analysis_mode`；仍为空时进入 `/app/recruiter`，保持现有用户的默认体验。
 - 已登录用户访问 `/login` 时使用相同优先级跳转，不固定写回旧的 `/app`。
-- `/app` 和 `/history` 作为兼容入口保留，分别重定向到最近模式；没有最近模式时进入 Recruiter。
+- `/app` 和 `/history` 作为兼容入口保留，分别重定向到上次使用的模式；没有模式记录时进入 Recruiter。
 - 未登录访问受保护路由仍按项目现有规则重定向到 `/`，不改变认证边界。
 - `/report/:id` 不带模式参数，报告加载后以自身 `analysisMode` 决定渲染器和模式标签。
 
@@ -490,7 +490,7 @@ Candidate Renderer 不调用招聘方的 `getOverallScore` 或维度评分解析
 - 未登录点击 Candidate CTA 后进入登录页，登录成功后到达 `/app/candidate`。
 - 未登录点击 Recruiter CTA 后进入登录页，登录成功后到达 `/app/recruiter`。
 - 已登录点击两个 CTA 时直接进入对应应用页。
-- 最近模式能够跨刷新保留；首次访问兼容 `/app` 时默认进入 Recruiter。
+- 上次使用的模式能够跨刷新保留；首次访问兼容 `/app` 时默认进入 Recruiter。
 - `/app`、`/history`、`/app/candidate`、`/app/recruiter`、`/history/candidate`、`/history/recruiter` 和 `/report/:id` 均满足规格中的守卫与重定向规则。
 - 桌面和移动导航都能切换模式；切换后新建页、历史页和导航激活态一致。
 
