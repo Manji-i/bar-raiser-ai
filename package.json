@@ -6,19 +6,21 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "server:dev": "node --watch server.js",
+    "test": "node --experimental-strip-types --test tests/*.test.*",
     "build": "vite build",
     "start": "node server.js",
     "preview": "vite preview"
   },
   "dependencies": {
     "@google/genai": "^1.38.0",
-    "cors": "^2.8.6",
     "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
     "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "lucide-react": "^0.563.0",
     "mammoth": "^1.11.0",
+    "multer": "^2.2.0",
     "node-fetch": "^3.3.2",
     "openai": "^6.27.0",
     "pdfjs-dist": "^5.4.530",

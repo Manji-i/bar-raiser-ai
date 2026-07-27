@@ -1,3 +1,7 @@
+import type { AnalysisMode } from './services/analysisMode';
+
+export type { AnalysisMode } from './services/analysisMode';
+
 export enum AnalysisStatus {
   IDLE = 'IDLE',
   PARSING = 'PARSING',
@@ -12,6 +16,10 @@ export interface AnalysisState {
   error: string | null;
   fileName: string | null;
   reportId?: string | null;
+  analysisMode?: AnalysisMode;
+  jobDescription?: string | null;
+  resumeFileName?: string | null;
+  resumeParseStatus?: string | null;
 }
 
 export interface FileData {
@@ -27,4 +35,8 @@ export interface Report {
   fileName: string;
   result: string;
   createdAt: string;
+  analysisMode?: AnalysisMode;
+  jobDescription?: string | null;
+  resumeFileName?: string | null;
+  resumeParseStatus?: string | null;
 }
