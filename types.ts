@@ -19,7 +19,7 @@ export interface AnalysisState {
   analysisMode?: AnalysisMode;
   jobDescription?: string | null;
   resumeFileName?: string | null;
-  resumeParseStatus?: string | null;
+  resumeParseStatus?: ResumeParseStatus | null;
 }
 
 export interface FileData {
@@ -54,12 +54,12 @@ export type AnalysisInput = CandidateAnalysisInput | RecruiterAnalysisInput;
 export interface Report {
   id: string;
   jobTitle: string;
-  competencies: string;
+  competencies: string | null;
   fileName: string;
   result: string;
   createdAt: string;
   analysisMode?: AnalysisMode;
   jobDescription?: string | null;
   resumeFileName?: string | null;
-  resumeParseStatus?: string | null;
+  resumeParseStatus?: ResumeParseStatus | null;
 }

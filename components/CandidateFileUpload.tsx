@@ -75,8 +75,14 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
       setResumeText(parsed.content);
       setResumeParseStatus(quality.status);
       setShowResumeEditor(quality.status === 'low_quality' || quality.status === 'empty');
-    } catch (parseError) {
-      setError(parseError instanceof Error ? parseError.message : '简历解析失败，请更换文件。');
+    } catch {
+      // A valid source file should remain available for protected storage even
+      // when browser-side extraction fails (for example, a scanned PDF).
+      setResumeFile(file);
+      setResumeText('');
+      setResumeParseStatus('empty');
+      setShowResumeEditor(true);
+      setError('简历正文未能识别。源文件仍会保存，你可以手动粘贴简历文本后继续。');
     } finally {
       setIsParsingResume(false);
     }

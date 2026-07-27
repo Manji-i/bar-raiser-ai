@@ -78,6 +78,8 @@ docker run -d \
 
 Dockerfile 会复制 `server.js`、`services/` 和 `dist/`，并创建可写的 `/app/data`。
 
+候选人模式会把简历源文件写入 `/app/data/uploads/resumes/`。容器部署必须继续持久化整个 `/app/data`，不能只单独挂载 `app.db`。
+
 ## 直接部署
 
 ```bash
@@ -114,12 +116,21 @@ pm2 save
 
 - `users` / `tokens` 表：用户数据和会话 token
 - `reports` 表：评估报告
+- `report_attachments` 表：简历附件元数据、解析状态与 SHA256
 - `feedback` 表：用户反馈
-- `system_prompt` 表：系统提示词（含版本历史）
+- `system_prompt` / `candidate_system_prompt` 表：招聘评估与个人复盘两套独立 Prompt（含版本历史）
+- `uploads/resumes/`：候选人简历源文件，按用户目录和随机文件名保存
 
 历史 JSON 文件（`users.json` 等）已被 `scripts/migrate-to-sqlite.mjs` 迁移并备份为 `*.migrated.bak`。
 
-这些数据可能包含用户 token、候选人材料和评估结果。部署时要持久化 `data/`，不要提交真实内容。
+这些数据可能包含用户 token、候选人材料、简历源文件和评估结果。部署时要持久化整个 `data/`，不要提交真实内容。简历上传上限为 10 MB，支持 PDF、DOCX、TXT；反向代理的请求体限制必须不低于 10 MB，并预留 multipart 开销。
+
+生产环境应确保：
+
+- 运行进程对 `data/` 有读写权限，但该目录不在静态资源目录中；
+- 备份同时覆盖 `app.db` 与 `uploads/resumes/`，并按敏感数据加密和限制访问；
+- 多实例部署使用共享持久卷，避免报告元数据与源文件落在不同节点；
+- 更新或回滚应用代码时不覆盖、清空 `data/`。
 
 ## 故障排查
 
