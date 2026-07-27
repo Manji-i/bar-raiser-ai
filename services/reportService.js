@@ -26,6 +26,21 @@ const toReport = (row) => ({
   result: row.result
 });
 
+const toAttachment = (row) => row ? ({
+  id: row.id,
+  reportId: row.report_id,
+  userId: row.user_id,
+  kind: row.kind,
+  originalName: row.original_name,
+  storedName: row.stored_name,
+  relativePath: row.relative_path,
+  mimeType: row.mime_type,
+  sizeBytes: row.size_bytes,
+  sha256: row.sha256,
+  parseStatus: row.parse_status,
+  createdAt: row.created_at
+}) : null;
+
 export const createReportService = (database, createId = uuidv4) => ({
   // 获取所有报告（管理员用）
   getAll: (analysisMode = null) => {
@@ -56,17 +71,31 @@ export const createReportService = (database, createId = uuidv4) => ({
     return null;
   },
 
-  create: (data, userId) => {
+  getResumeAttachment: (reportId) => {
+    const row = database.prepare(`
+      SELECT * FROM report_attachments
+      WHERE report_id = ? AND kind = 'resume'
+      ORDER BY created_at DESC LIMIT 1
+    `).get(reportId);
+    return toAttachment(row);
+  },
+
+  getAttachments: (reportId) => {
+    const rows = database.prepare('SELECT * FROM report_attachments WHERE report_id = ?').all(reportId);
+    return rows.map(toAttachment);
+  },
+
+  create: (data, userId, attachment = null) => {
     const analysisMode = data.analysisMode === 'candidate' ? 'candidate' : 'recruiter';
     const newReport = {
-      id: createId(),
-      userId,
-      createdAt: new Date().toISOString(),
       ...data,
+      id: data.id ?? createId(),
+      userId,
+      createdAt: data.createdAt ?? new Date().toISOString(),
       analysisMode
     };
 
-    database.prepare(`
+    const insertReport = () => database.prepare(`
       INSERT INTO reports (
         id, user_id, created_at, analysis_mode, job_title, job_description,
         competencies, file_name, resume_text, transcript, result
@@ -85,6 +114,46 @@ export const createReportService = (database, createId = uuidv4) => ({
       newReport.transcript ?? null,
       newReport.result ?? null
     );
+
+    const insertAttachment = () => {
+      if (!attachment) return;
+      if (attachment.reportId !== newReport.id || attachment.userId !== userId) {
+        throw new Error('Attachment ownership does not match report');
+      }
+      database.prepare(`
+        INSERT INTO report_attachments (
+          id, report_id, user_id, kind, original_name, stored_name, relative_path,
+          mime_type, size_bytes, sha256, parse_status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        attachment.id,
+        attachment.reportId,
+        attachment.userId,
+        attachment.kind,
+        attachment.originalName,
+        attachment.storedName,
+        attachment.relativePath,
+        attachment.mimeType,
+        attachment.sizeBytes,
+        attachment.sha256,
+        attachment.parseStatus,
+        attachment.createdAt
+      );
+    };
+
+    if (attachment) {
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        insertReport();
+        insertAttachment();
+        database.exec('COMMIT');
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
+    } else {
+      insertReport();
+    }
 
     const { resumeText: _privateResumeText, ...publicReport } = newReport;
     return publicReport;

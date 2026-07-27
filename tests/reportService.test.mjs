@@ -54,3 +54,51 @@ test('report service stores candidate context and filters history by mode', () =
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('报告与简历附件在同一事务写入并可读取下载元数据', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'evalbar-report-attachment-'));
+  const database = new DatabaseSync(join(directory, 'app.db'));
+
+  try {
+    initializeSchema(database);
+    const service = createReportService(database, () => 'generated-report');
+    const attachment = {
+      id: 'attachment-1',
+      reportId: 'candidate-report',
+      userId: 'user-1',
+      kind: 'resume',
+      originalName: 'resume.pdf',
+      storedName: 'random.pdf',
+      relativePath: 'user-1/random.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 128,
+      sha256: 'a'.repeat(64),
+      parseStatus: 'usable',
+      createdAt: '2026-07-27T00:00:00.000Z'
+    };
+
+    service.create({
+      id: 'candidate-report',
+      analysisMode: 'candidate',
+      jobTitle: '产品经理',
+      transcript: '面试记录',
+      result: '报告'
+    }, 'user-1', attachment);
+
+    assert.equal(service.getById('candidate-report', 'user-1').resumeFileName, 'resume.pdf');
+    assert.deepEqual({ ...service.getResumeAttachment('candidate-report') }, attachment);
+
+    const invalidAttachment = { ...attachment, originalName: null, reportId: 'rolled-back-report' };
+    assert.throws(() => service.create({
+      id: 'rolled-back-report',
+      analysisMode: 'candidate',
+      jobTitle: '产品经理',
+      transcript: '面试记录',
+      result: '报告'
+    }, 'user-1', invalidAttachment));
+    assert.equal(database.prepare('SELECT id FROM reports WHERE id = ?').get('rolled-back-report'), undefined);
+  } finally {
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

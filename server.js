@@ -2,13 +2,25 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import multer from 'multer';
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { reportService } from './services/reportService.js';
 import { promptService } from './services/promptService.js';
 import { userService } from './services/userService.js';
+import {
+  buildCandidateInput,
+  buildRecruiterInput,
+  normalizeAnalysisMode,
+  validateAnalysisRequest
+} from './services/analysisRequest.js';
+import {
+  reportAttachmentService,
+  validateResumeFile
+} from './services/reportAttachmentService.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -49,12 +61,6 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-// Get system prompt from promptService
-const getSystemPrompt = () => {
-  const promptData = promptService.getCurrentPrompt();
-  return promptData.content;
-};
-
 // Model Configuration
 const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini'; // 'gemini' or 'doubao'
 // Doubao model: prefer DOUBAO_MODEL (Ark model ID), fall back to legacy DOUBAO_ENDPOINT_ID
@@ -80,6 +86,51 @@ if (AI_PROVIDER === 'gemini') {
         console.warn("Warning: DOUBAO_API_KEY is not set.");
     }
 }
+
+const resumeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { files: 1, fileSize: 10 * 1024 * 1024 }
+});
+
+const uploadResume = (req, res, next) => {
+  if (!req.is('multipart/form-data')) return next();
+  return resumeUpload.single('resumeFile')(req, res, (error) => {
+    if (!error) return next();
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'Resume file exceeds 10 MB'
+      : 'Invalid resume upload';
+    return res.status(400).json({ error: message });
+  });
+};
+
+const runAiAnalysis = async (systemPrompt, inputContent) => {
+  if (AI_PROVIDER === 'gemini') {
+    if (!googleAi) throw new Error('Gemini is not configured.');
+    const response = await googleAi.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: inputContent,
+      config: { systemInstruction: systemPrompt, temperature: 0.4 }
+    });
+    return typeof response.text === 'function' ? response.text() : response.text;
+  }
+
+  if (AI_PROVIDER === 'doubao') {
+    if (!openai) throw new Error('Doubao (OpenAI) is not configured.');
+    const completion = await openai.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: inputContent }
+      ],
+      model: DOUBAO_MODEL,
+      temperature: 0.4
+    });
+    return completion.choices[0]?.message?.content;
+  }
+
+  throw new Error(`Unsupported AI Provider: ${AI_PROVIDER}`);
+};
+
+const isRequestValidationError = (error) => /^(Invalid|Missing|Resume|Unsupported)/.test(error?.message ?? '');
 
 // API Routes
 
@@ -130,84 +181,87 @@ app.get('/api/auth/me', authenticate, (req, res) => {
 });
 
 // Analyze Interview (需要认证)
-app.post('/api/analyze', authenticate, async (req, res) => {
+app.post('/api/analyze', authenticate, uploadResume, async (req, res) => {
   console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${AI_PROVIDER}`);
   try {
-    const { transcript, jobTitle, competencies, fileName } = req.body;
+    const analysisMode = validateAnalysisRequest(req.body);
+    const resumeParseStatus = req.body.resumeParseStatus || (req.file ? null : 'not_provided');
 
-    if (!transcript || !jobTitle || !competencies) {
-      return res.status(400).json({ error: 'Missing required fields: transcript, jobTitle, competencies' });
+    if (req.file && analysisMode !== 'candidate') {
+      return res.status(400).json({ error: 'Resume upload is only available in candidate mode' });
+    }
+    if (analysisMode === 'candidate') {
+      const validStatuses = new Set(['usable', 'low_quality', 'empty', 'manual', 'not_provided']);
+      if (!validStatuses.has(resumeParseStatus)) {
+        return res.status(400).json({ error: 'Invalid resume parse status' });
+      }
+      if (req.file && resumeParseStatus === 'not_provided') {
+        return res.status(400).json({ error: 'Resume parse status is required for uploaded files' });
+      }
+      if (req.file) validateResumeFile(req.file);
     }
 
-    const inputContent = `
-=== INPUT DATA START ===
-**Job Title**: ${jobTitle}
+    const inputData = { ...req.body, resumeParseStatus };
+    const inputContent = analysisMode === 'candidate'
+      ? buildCandidateInput(inputData)
+      : buildRecruiterInput(inputData);
+    const systemPrompt = promptService.getCurrentPrompt(analysisMode).content;
+    const resultText = await runAiAnalysis(systemPrompt, inputContent);
 
-**Competency Model Requirements**:
-${competencies}
-
-**Interview Transcript**:
-${transcript}
-=== INPUT DATA END ===
-
-Please analyze the transcript based on the Job Title and Competency Model provided above.
-`;
-
-    let resultText = "";
-
-    const systemPrompt = getSystemPrompt();
-    
-    if (AI_PROVIDER === 'gemini') {
-        if (!googleAi) throw new Error("Gemini is not configured.");
-        const response = await googleAi.models.generateContent({
-            model: "gemini-3-pro-preview", 
-            contents: inputContent,
-            config: {
-                systemInstruction: systemPrompt,
-                temperature: 0.4, 
-            },
-        });
-        resultText = response.text ? response.text() : null;
-    } else if (AI_PROVIDER === 'doubao') {
-        if (!openai) throw new Error("Doubao (OpenAI) is not configured.");
-        const completion = await openai.chat.completions.create({
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: inputContent },
-            ],
-            model: DOUBAO_MODEL,
-            temperature: 0.4,
-        });
-        resultText = completion.choices[0]?.message?.content;
-    } else {
-        throw new Error(`Unsupported AI Provider: ${AI_PROVIDER}`);
+    if (!resultText) {
+      throw new Error('No text response received from AI service.');
     }
 
-    if (resultText) {
-      // 保存报告，关联用户ID
+    const reportId = uuidv4();
+    let attachment = null;
+    try {
+      if (req.file) {
+        attachment = await reportAttachmentService.saveResumeFile({
+          userId: req.user.id,
+          reportId,
+          file: req.file,
+          parseStatus: resumeParseStatus
+        });
+      }
+
       const report = reportService.create({
-        jobTitle,
-        competencies,
-        fileName: fileName || 'Unknown File',
-        transcript,
+        id: reportId,
+        analysisMode,
+        jobTitle: req.body.jobTitle,
+        jobDescription: analysisMode === 'candidate' ? req.body.jobDescription : null,
+        competencies: analysisMode === 'recruiter' ? req.body.competencies : null,
+        fileName: req.body.fileName || '粘贴的面试记录',
+        resumeText: analysisMode === 'candidate' ? req.body.resumeText : null,
+        transcript: req.body.transcript,
         result: resultText
-      }, req.user.id);
+      }, req.user.id, attachment);
 
-      res.json({ result: resultText, reportId: report.id });
-    } else {
-      throw new Error("No text response received from AI service.");
+      return res.json({ result: resultText, reportId: report.id });
+    } catch (persistError) {
+      if (attachment) {
+        try {
+          await reportAttachmentService.deleteAttachmentFile(attachment.relativePath);
+        } catch (cleanupError) {
+          console.error('Attachment cleanup failed:', attachment.id, cleanupError?.code || cleanupError?.name || 'Error');
+        }
+      }
+      throw persistError;
     }
-
   } catch (error) {
-    console.error("AI Analysis Error:", error);
-    res.status(500).json({ error: error.message || "An error occurred during analysis." });
+    const status = isRequestValidationError(error) ? 400 : 500;
+    console.error('AI Analysis Error:', error?.name || 'Error');
+    res.status(status).json({ error: error.message || 'An error occurred during analysis.' });
   }
 });
 
 // Reports Endpoints (需要认证)
 app.get('/api/reports', authenticate, (req, res) => {
-  // 普通用户看自己的，管理员可以用 /api/admin/reports 看所有
-  const reports = reportService.getByUser(req.user.id);
+  const rawMode = req.query.analysisMode;
+  if (rawMode !== undefined && rawMode !== 'candidate' && rawMode !== 'recruiter') {
+    return res.status(400).json({ error: 'Invalid analysisMode' });
+  }
+  // 普通用户看自己的，管理员可以用 /api/admin/reports 看所有。
+  const reports = reportService.getByUser(req.user.id, rawMode);
   res.json(reports);
 });
 
@@ -220,18 +274,54 @@ app.get('/api/reports/:id', authenticate, (req, res) => {
   }
 });
 
-app.delete('/api/reports/:id', authenticate, (req, res) => {
+app.get('/api/reports/:id/resume', authenticate, (req, res) => {
+  const report = reportService.getById(req.params.id, req.user.id, req.user.isAdmin);
+  if (!report) return res.status(404).json({ error: 'Report not found' });
+
+  const attachment = reportService.getResumeAttachment(req.params.id);
+  if (!attachment) return res.status(404).json({ error: 'Resume not found' });
+
+  let absolutePath;
+  try {
+    absolutePath = reportAttachmentService.resolveStoredPath(attachment.relativePath);
+  } catch {
+    return res.status(404).json({ error: 'Resume not found' });
+  }
+
+  return res.download(absolutePath, attachment.originalName, (error) => {
+    if (error && !res.headersSent) {
+      res.status(404).json({ error: 'Resume not found' });
+    }
+  });
+});
+
+app.delete('/api/reports/:id', authenticate, async (req, res) => {
+  const report = reportService.getById(req.params.id, req.user.id, req.user.isAdmin);
+  if (!report) return res.status(404).json({ error: 'Report not found' });
+
+  const attachments = reportService.getAttachments(req.params.id);
   const success = reportService.delete(req.params.id, req.user.id, req.user.isAdmin);
   if (success) {
+    await Promise.all(attachments.map(async (attachment) => {
+      try {
+        await reportAttachmentService.deleteAttachmentFile(attachment.relativePath);
+      } catch (error) {
+        console.error('Attachment deletion failed:', attachment.id, error?.code || error?.name || 'Error');
+      }
+    }));
     res.json({ success: true });
   } else {
-    res.status(404).json({ error: "Report not found" });
+    res.status(404).json({ error: 'Report not found' });
   }
 });
 
 // Admin Reports Endpoints (仅管理员)
 app.get('/api/admin/reports', authenticate, requireAdmin, (req, res) => {
-  const reports = reportService.getAll();
+  const rawMode = req.query.analysisMode;
+  if (rawMode !== undefined && rawMode !== 'candidate' && rawMode !== 'recruiter') {
+    return res.status(400).json({ error: 'Invalid analysisMode' });
+  }
+  const reports = reportService.getAll(rawMode);
   res.json(reports);
 });
 
@@ -277,7 +367,11 @@ app.get('/api/feedback', authenticate, requireAdmin, (req, res) => {
 // Prompt Iteration Endpoint
 app.post('/api/prompt/iterate', authenticate, requireAdmin, (req, res) => {
   try {
-    const { feedbackSummary } = req.body;
+    const { feedbackSummary, analysisMode = 'recruiter' } = req.body;
+    const mode = normalizeAnalysisMode(analysisMode);
+    if (mode === 'candidate') {
+      return res.status(400).json({ error: 'Candidate prompt iteration is not supported' });
+    }
     
     if (!feedbackSummary) {
       return res.status(400).json({ error: 'Missing required field: feedbackSummary' });
@@ -287,35 +381,40 @@ app.post('/api/prompt/iterate', authenticate, requireAdmin, (req, res) => {
     res.json({ success: true, prompt: newPrompt });
   } catch (error) {
     console.error("Error iterating prompt:", error);
-    res.status(500).json({ error: error.message || "An error occurred while iterating prompt." });
+    const status = isRequestValidationError(error) ? 400 : 500;
+    res.status(status).json({ error: error.message || "An error occurred while iterating prompt." });
   }
 });
 
 // Get Current Prompt Endpoint
 app.get('/api/prompt/current', authenticate, requireAdmin, (req, res) => {
   try {
-    const prompt = promptService.getCurrentPrompt();
+    const mode = normalizeAnalysisMode(req.query.analysisMode);
+    const prompt = promptService.getCurrentPrompt(mode);
     res.json(prompt);
   } catch (error) {
     console.error("Error getting current prompt:", error);
-    res.status(500).json({ error: error.message || "An error occurred while getting current prompt." });
+    const status = isRequestValidationError(error) ? 400 : 500;
+    res.status(status).json({ error: error.message || "An error occurred while getting current prompt." });
   }
 });
 
 // Update Current Prompt Endpoint
 app.put('/api/prompt/current', authenticate, requireAdmin, (req, res) => {
   try {
-    const { content } = req.body;
+    const { content, analysisMode = 'recruiter' } = req.body;
     if (!content) {
       return res.status(400).json({ error: "Content is required" });
     }
-    
-    const newPrompt = promptService.updatePrompt(content);
+
+    const mode = normalizeAnalysisMode(analysisMode);
+    const newPrompt = promptService.updatePrompt(content, mode);
 
     res.json({ success: true, prompt: newPrompt });
   } catch (error) {
     console.error("Error updating prompt:", error);
-    res.status(500).json({ error: error.message || "An error occurred while updating prompt." });
+    const status = isRequestValidationError(error) ? 400 : 500;
+    res.status(status).json({ error: error.message || "An error occurred while updating prompt." });
   }
 });
 
