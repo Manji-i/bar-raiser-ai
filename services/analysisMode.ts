@@ -17,3 +17,27 @@ export const modeFromPath = (pathname: string): AnalysisMode | null => {
   const segment = pathname.split('/').filter(Boolean)[1];
   return isAnalysisMode(segment) ? segment : null;
 };
+
+export const getRecentMode = (): AnalysisMode =>
+  typeof window === 'undefined'
+    ? 'recruiter'
+    : resolveStoredMode(window.localStorage.getItem(ANALYSIS_MODE_KEY));
+
+export const rememberMode = (mode: AnalysisMode): void => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(ANALYSIS_MODE_KEY, mode);
+  }
+};
+
+export const setPostLoginPath = (mode: AnalysisMode): void => {
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.setItem(POST_LOGIN_PATH_KEY, modePath(mode, 'app'));
+  }
+};
+
+export const consumePostLoginPath = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const value = window.sessionStorage.getItem(POST_LOGIN_PATH_KEY);
+  window.sessionStorage.removeItem(POST_LOGIN_PATH_KEY);
+  return value === '/app/candidate' || value === '/app/recruiter' ? value : null;
+};

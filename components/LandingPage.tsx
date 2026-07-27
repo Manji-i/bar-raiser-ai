@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../src/context/AuthContext';
 import SampleReportSection from './SampleReportSection';
+import type { AnalysisMode } from '../types';
+import { modePath, rememberMode, setPostLoginPath } from '../services/analysisMode';
 import {
   BrainCircuit, LogIn, ArrowRight, UploadCloud, ScanSearch, FileBarChart,
-  Crosshair, Sparkles, History, MessageSquareQuote, Check,
+  Crosshair, Sparkles, History, MessageSquareQuote,
 } from 'lucide-react';
 
 // Scroll-triggered reveal wrapper (IntersectionObserver, no external animation lib)
@@ -49,7 +51,7 @@ const WORKFLOW_STEPS = [
   {
     icon: UploadCloud,
     title: '上传面试材料',
-    desc: '支持上传面试记录文件或直接粘贴文本，浏览器本地完成解析，材料不出本机。',
+    desc: '支持上传面试记录文件或直接粘贴文本，文件先在浏览器中完成解析。',
   },
   {
     icon: ScanSearch,
@@ -92,11 +94,28 @@ const MOCK_DIMENSIONS = [
   { label: '结果导向', value: 82 },
 ];
 
+const MODE_ICON_URLS = {
+  candidate: 'https://cdn-tos-cn.bytedance.net/obj/archi/ee/es-design-base/svgs/icon_pa-job-level_outlined.d248899f.svg',
+  recruiter: 'https://cdn-tos-cn.bytedance.net/obj/archi/ee/es-design-base/svgs/icon_pa-personnel-hcplan_outlined.f1b0608f.svg',
+};
+
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const entryPath = user ? '/app' : '/login';
+  const enterMode = (mode: AnalysisMode) => {
+    rememberMode(mode);
+    if (!user) {
+      setPostLoginPath(mode);
+      navigate('/login');
+      return;
+    }
+    navigate(modePath(mode, 'app'));
+  };
+
+  const scrollToMode = (id: 'candidate-intro' | 'recruiter-intro') => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-300 selection:bg-brand-100 selection:text-brand-900">
@@ -116,7 +135,7 @@ const LandingPage: React.FC = () => {
           </div>
           {user ? (
             <button
-              onClick={() => navigate('/app')}
+              onClick={() => navigate(modePath('recruiter', 'app'))}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 transition-all shadow-lg shadow-indigo-500/20"
             >
               进入应用
@@ -146,40 +165,54 @@ const LandingPage: React.FC = () => {
             <Reveal>
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-full">
                 <Sparkles className="w-3.5 h-3.5" />
-                AI 驱动的面试评估助手
+                AI 驱动的面试复盘与评估助手
               </span>
             </Reveal>
             <Reveal delay={100}>
               <h2 className="mt-6 text-4xl md:text-5xl font-extrabold text-white leading-tight tracking-tight">
-                让每一次面试评估
+                一场面试，
                 <br />
-                更{' '}
                 <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
-                  精准
+                  看清两种答案
                 </span>
               </h2>
             </Reveal>
             <Reveal delay={200}>
               <p className="mt-6 text-base md:text-lg text-slate-400 leading-relaxed max-w-xl">
-                上传面试记录，Eval Bar AI 将基于 STAR 法则分析候选人的行为证据，
-                结合岗位胜任力进行人岗匹配，生成专业、可追溯的录用建议——
-                帮你把招聘标准抬得更高。
+                无论你想复盘自己的表现，还是判断候选人与岗位是否匹配，
+                都可以从同一份面试记录中找到真实行为证据。
               </p>
             </Reveal>
             <Reveal delay={300}>
-              <div className="mt-8 flex flex-wrap items-center gap-4">
+              <div className="mt-8 grid sm:grid-cols-2 gap-3 max-w-xl">
                 <button
-                  onClick={() => navigate(entryPath)}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5"
+                  onClick={() => scrollToMode('candidate-intro')}
+                  className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left text-slate-900 bg-white border border-white hover:border-violet-300 transition-colors"
                 >
-                  开始使用
-                  <ArrowRight className="w-4 h-4" />
+                  <span className="w-10 h-10 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
+                    <img src={MODE_ICON_URLS.candidate} alt="" className="w-5 h-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-base font-semibold">提升自己</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">复盘我的面试表现与成长方向</span>
+                  </span>
+                  <ArrowRight className="w-4 h-4 ml-auto text-slate-400 group-hover:text-violet-500" />
                 </button>
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <Check className="w-4 h-4 text-indigo-400" />
-                  面试材料仅在浏览器本地解析
-                </div>
+                <button
+                  onClick={() => scrollToMode('recruiter-intro')}
+                  className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left text-white bg-indigo-600 border border-indigo-500 hover:bg-indigo-500 transition-colors"
+                >
+                  <span className="w-10 h-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
+                    <img src={MODE_ICON_URLS.recruiter} alt="" className="w-5 h-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-base font-semibold">判断他人</span>
+                    <span className="block text-xs text-indigo-100 mt-0.5">评估候选人与目标岗位的匹配度</span>
+                  </span>
+                  <ArrowRight className="w-4 h-4 ml-auto text-indigo-200 group-hover:text-white" />
+                </button>
               </div>
+              <p className="mt-4 text-xs text-slate-500">先了解对应流程，再进入登录与分析。</p>
             </Reveal>
           </div>
 
@@ -251,13 +284,55 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
+      {/* 求职者模式 */}
+      <section id="candidate-intro" className="scroll-mt-16 bg-slate-50 text-slate-900 py-20 border-t-4 border-violet-400">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <Reveal>
+            <div className="max-w-3xl">
+              <div className="text-xs font-semibold text-violet-600 tracking-widest">求职者模式 · 提升自己</div>
+              <h3 className="mt-3 text-3xl font-extrabold tracking-tight">面试结束了，但成长才刚开始</h3>
+              <p className="mt-4 text-slate-600 leading-relaxed">
+                上传目标岗位、简历与面试记录，集中找出 3–5 个最影响表现的核心问题，获得可以直接练习的回答结构与行动建议。
+              </p>
+            </div>
+          </Reveal>
+          <div className="mt-10 grid md:grid-cols-3 gap-4">
+            {[
+              ['01', '提供目标岗位', '职位名称必填，JD 选填。'],
+              ['02', '补充简历与面试记录', '简历选填；面试记录支持文件或粘贴文本。'],
+              ['03', '获得个人复盘报告', '不打分，聚焦核心问题、示范回答和准备动作。'],
+            ].map(([index, title, desc], i) => (
+              <Reveal key={title} delay={i * 100}>
+                <div className="h-full bg-white border border-slate-200 rounded-xl p-6">
+                  <div className="text-xs font-semibold text-violet-500">STEP {index}</div>
+                  <h4 className="mt-3 text-base font-semibold">{title}</h4>
+                  <p className="mt-2 text-sm text-slate-600 leading-relaxed">{desc}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+          <Reveal delay={300}>
+            <button
+              onClick={() => enterMode('candidate')}
+              className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors"
+            >
+              开始复盘我的面试 <ArrowRight className="w-4 h-4" />
+            </button>
+            <p className="mt-4 max-w-3xl text-xs text-slate-500 leading-relaxed">
+              文件先在浏览器解析；提交分析后，面试文本及可用的简历文本会发送给当前配置的 AI 服务。上传简历时，源文件与解析文本会保存在受保护的服务器目录，仅本人和管理员可访问。
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
       {/* 三步工作流 */}
-      <section className="relative bg-slate-50 text-slate-900 py-20">
+      <section id="recruiter-intro" className="scroll-mt-16 relative bg-white text-slate-900 py-20 border-t-4 border-indigo-500">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal>
             <div className="text-center mb-14">
+              <div className="text-xs font-semibold text-indigo-600 tracking-widest mb-3">招聘方模式 · 判断他人</div>
               <h3 className="text-3xl font-extrabold tracking-tight">三步完成一次专业评估</h3>
-              <p className="mt-3 text-slate-600">从面试记录到录用建议，全流程由 AI 辅助完成。</p>
+              <p className="mt-3 text-slate-600">从岗位胜任力和面试记录出发，生成人岗匹配与录用建议。</p>
             </div>
           </Reveal>
           <div className="grid md:grid-cols-3 gap-6 relative">
@@ -279,6 +354,16 @@ const LandingPage: React.FC = () => {
               );
             })}
           </div>
+          <Reveal delay={300}>
+            <div className="mt-8 text-center">
+              <button
+                onClick={() => enterMode('recruiter')}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+              >
+                开始评估候选人 <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -323,13 +408,20 @@ const LandingPage: React.FC = () => {
             <p className="mt-4 text-slate-400">
               登录后即可开始你的第一次面试分析。
             </p>
-            <button
-              onClick={() => navigate(entryPath)}
-              className="mt-8 inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 transition-all shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5"
-            >
-              {user ? '进入应用' : '立即登录'}
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <button
+                onClick={() => enterMode('candidate')}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-slate-900 bg-white hover:bg-slate-100 transition-colors"
+              >
+                提升自己 <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => enterMode('recruiter')}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors"
+              >
+                判断他人 <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </Reveal>
         </div>
       </section>
