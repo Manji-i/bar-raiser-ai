@@ -1,21 +1,34 @@
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
+export interface ParsedFileContent {
+  content: string;
+  pageCount: number;
+}
+
 export const parseFile = async (file: File): Promise<string> => {
+  const parsed = await parseFileWithMetadata(file);
+  if (!parsed.content.trim()) {
+    throw new Error(`Failed to parse file: ${file.name}. Please try pasting the text directly.`);
+  }
+  return parsed.content;
+};
+
+export const parseFileWithMetadata = async (file: File): Promise<ParsedFileContent> => {
   const fileType = file.type;
   
   try {
     if (fileType === "application/pdf") {
-      return await readPdfFile(file);
+      return await readPdfFileWithMetadata(file);
     } else if (
       fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
-      return await readDocxFile(file);
+      return { content: await readDocxFile(file), pageCount: 1 };
     } else if (fileType === "text/plain" || fileType === "text/markdown") {
-      return await readTextFile(file);
+      return { content: await readTextFile(file), pageCount: 1 };
     } else {
       // Fallback: try reading as text
-      return await readTextFile(file);
+      return { content: await readTextFile(file), pageCount: 1 };
     }
   } catch (error) {
     console.error("File Parsing Error:", error);
@@ -49,7 +62,7 @@ const readDocxFile = async (file: File): Promise<string> => {
   });
 };
 
-const readPdfFile = async (file: File): Promise<string> => {
+const readPdfFileWithMetadata = async (file: File): Promise<ParsedFileContent> => {
   try {
     const arrayBuffer = await file.arrayBuffer();
     
@@ -59,7 +72,7 @@ const readPdfFile = async (file: File): Promise<string> => {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
 
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = "";
+    const pages: string[] = [];
 
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
@@ -67,14 +80,9 @@ const readPdfFile = async (file: File): Promise<string> => {
       const pageText = textContent.items
         .map((item: any) => item.str)
         .join(" ");
-      fullText += `--- Page ${i} ---\n${pageText}\n`;
+      pages.push(pageText);
     }
-
-    if (!fullText.trim()) {
-      throw new Error("PDF text extraction resulted in empty content. It might be an image-only PDF.");
-    }
-
-    return fullText;
+    return { content: pages.join("\n"), pageCount: pdf.numPages };
   } catch (e: any) {
     console.error("PDF Parse Error details:", e);
     throw new Error("Could not parse PDF. This may be due to browser security restrictions or file format issues. Please copy and paste the text instead.");
