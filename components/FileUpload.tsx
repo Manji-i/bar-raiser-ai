@@ -237,7 +237,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
 
         {/* Step 1: Role Profile */}
         {step === 1 && (
-          <div className="p-6 md:p-8 animate-in fade-in duration-300">
+          <div className="p-6 md:p-8">
 
             {/* Template Management Bar */}
             <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -246,7 +246,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
                 <h3>职位画像</h3>
               </div>
 
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
                 {templates.map(t => (
                   <div
                     key={t.id}
@@ -300,7 +300,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
             </div>
 
             {error && (
-              <div className="mt-6 flex items-start gap-3 text-red-600 bg-red-50 p-4 rounded-lg text-sm animate-in slide-in-from-top-1">
+              <div className="mt-6 flex items-start gap-3 text-red-600 bg-red-50 p-4 rounded-lg text-sm">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
@@ -317,7 +317,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
                   保存为模板
                 </button>
               ) : (
-                <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-brand-200 shadow-sm animate-in fade-in slide-in-from-left-4 duration-300">
+                <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-brand-200 shadow-sm">
                   <input
                     type="text"
                     value={newTemplateName}
@@ -355,7 +355,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
 
         {/* Step 2: Interview Material */}
         {step === 2 && (
-          <div className="animate-in fade-in duration-300">
+          <div>
             {/* Input Method Tabs */}
             <div className="flex border-b border-slate-100">
               <button
@@ -416,7 +416,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
                   </div>
 
                   {parsedFile && (
-                    <div className="flex items-center gap-3 bg-brand-50 border border-brand-200 rounded-lg px-4 py-3 animate-in fade-in duration-300">
+                    <div className="flex items-center gap-3 bg-brand-50 border border-brand-200 rounded-lg px-4 py-3">
                       <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center flex-shrink-0">
                         <FileText className="w-4 h-4" />
                       </div>
@@ -437,7 +437,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
                   )}
                 </div>
               ) : (
-                <div className="animate-in fade-in duration-300">
+                <div>
                   <textarea
                     value={textInput}
                     onChange={(e) => setTextInput(e.target.value)}
@@ -448,7 +448,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
               )}
 
               {error && (
-                <div className="mt-6 flex items-start gap-3 text-red-600 bg-red-50 p-4 rounded-lg text-sm animate-in slide-in-from-top-1">
+                <div className="mt-6 flex items-start gap-3 text-red-600 bg-red-50 p-4 rounded-lg text-sm">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -477,7 +477,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
 
         {/* Step 3: Review & Analyze */}
         {step === 3 && (
-          <div className="p-6 md:p-8 animate-in fade-in duration-300">
+          <div className="p-6 md:p-8">
             <h3 className="text-lg font-bold text-slate-900 mb-6">确认你的输入</h3>
 
             <div className="grid md:grid-cols-2 gap-4 mb-6">
@@ -509,7 +509,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
             </div>
 
             {error && (
-              <div className="mb-6 flex items-start gap-3 text-red-600 bg-red-50 p-4 rounded-lg text-sm animate-in slide-in-from-top-1">
+              <div className="mb-6 flex items-start gap-3 text-red-600 bg-red-50 p-4 rounded-lg text-sm">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>

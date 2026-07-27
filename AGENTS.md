@@ -81,6 +81,38 @@
 - `/report/:id`：按报告自身 `analysisMode` 渲染；`/admin`：管理员后台。未登录访问受保护路由统一重定向到 `/`。
 - 登录成功或已登录访问 `/login` 时优先恢复待跳转模式。应用内返回/新建分析必须回到当前模式的 `/app/<mode>`，不要写回 `/`。
 
+## 视觉体系
+
+未来迭代、重构、新增页面都必须保持这套视觉；除非明确要改整个视觉体系，否则不得偏离。
+
+### 单一来源
+
+- `components/ui.tsx`：视觉基元层。按钮用 `Button`（`primary` 品牌渐变 / `secondary` 白底 / `danger` / `icon`）、卡片用 `Card`、输入框用 `Input`、评分徽章用 `ScoreBadge`、图标容器用 `IconTile`；品牌渐变常量 `BRAND_GRADIENT`、评分配色 `getScoreBadgeClass` 也从这里导出。
+- `index.html` 内联 Tailwind 配置：`brand` 色板（唯一的 design token）和 Inter 字体。
+- 新增页面或组件必须使用 `components/ui.tsx` 的基元；出现新的通用视觉元素时先沉淀到 `ui.tsx`，不要在页面里另写一套。
+
+### 风格总则
+
+- 应用内使用浅色主题（`bg-slate-50`、白色卡片、slate 文字）；落地页以深色 Hero（`bg-slate-900`）开场，中段浅色，结尾深色。
+- 品牌渐变 `from-indigo-500 to-violet-500` 是唯一品牌签名，用于主按钮、Logo、图标块和评分高亮；不要引入其他强调色。
+- 中性色只用 slate：标题 `slate-900`、正文 `slate-600/700`、辅助 `slate-500`、禁用 `slate-400`。
+- 状态色：成功 green、警告 amber、错误 red；星级和评论使用 yellow。评分等级语义配色统一使用 `getScoreBadgeClass`。
+- 圆角分层：大卡片 `rounded-2xl`、中卡片 `rounded-xl`、按钮和输入框 `rounded-lg`、徽章 `rounded-full`；卡片阴影使用 `shadow-sm`，品牌元素可以使用 `shadow-indigo-500/20` 光晕。
+
+### 字体与排版
+
+- 全局使用 Inter。字号层级：落地页 Hero `text-4xl md:text-5xl font-extrabold`，页标题 `text-3xl md:text-4xl`，H1 `text-2xl/3xl font-bold`，卡片标题 `text-lg/xl`，正文 `text-base/sm`，辅助信息 `text-xs`。
+- 标题使用 `tracking-tight`；小标签使用 `uppercase tracking-wide`；品牌词可以使用文字渐变（`bg-clip-text text-transparent`）。
+- 容器统一使用 `max-w-6xl mx-auto px-4 sm:px-6`；表单场景收窄到 `max-w-4xl` 或 `max-w-md`。
+
+### 禁止事项
+
+- 禁止用 emoji 代替图标；图标统一使用 lucide-react（按钮内 `w-4 h-4`、卡片内 `w-5 h-5`）。
+- 禁止引入 brand/slate 之外的新强调色；禁止绕开 `ui.tsx` 手写新的按钮、卡片或徽章体系。
+- Tailwind 当前通过 CDN 加载，没有注册 `tailwindcss-animate` 等插件；不要使用 `animate-in`、`fade-in`、`slide-in-*` 等插件类。动效只使用内置动画、CSS transition 或项目已实现的 IntersectionObserver 方案。
+
+修改视觉体系时必须同步更新 `components/ui.tsx`、`index.html` 的 brand 色板和本章节。
+
 ## 代码注意点
 
 - 认证统一使用 `Authorization: Bearer <token>`。
