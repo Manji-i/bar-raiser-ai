@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Star, MessageSquare, RefreshCw, Eye, FileText, Calendar, Briefcase, TrendingUp } from 'lucide-react';
+import { Settings, Star, MessageSquare, RefreshCw, Eye, FileText, Calendar, Briefcase, TrendingUp, Bot, Lightbulb } from 'lucide-react';
 import { format } from 'date-fns';
+import type { AnalysisMode } from '../types';
 
 interface Report {
   id: string;
@@ -11,6 +12,7 @@ interface Report {
   result: string;
   createdAt: string;
   userId?: string;
+  analysisMode?: AnalysisMode;
 }
 
 interface Feedback {
@@ -40,7 +42,7 @@ const getAuthHeaders = () => {
 };
 
 const AdminView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'feedback' | 'reports'>('feedback');
+  const [activeTab, setActiveTab] = useState<'feedback' | 'reports' | 'prompt'>('feedback');
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,12 @@ const AdminView: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [feedbackDetailTab, setFeedbackDetailTab] = useState<'transcript' | 'assessment'>('transcript');
   const [reportDetailTab, setReportDetailTab] = useState<'transcript' | 'assessment'>('transcript');
+  const [promptMode, setPromptMode] = useState<AnalysisMode>('recruiter');
+  const [promptContent, setPromptContent] = useState('');
+  const [promptVersion, setPromptVersion] = useState<number | null>(null);
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptSaving, setPromptSaving] = useState(false);
+  const [promptMessage, setPromptMessage] = useState('');
   const [authenticated, setAuthenticated] = useState(() => {
     const token = localStorage.getItem('auth_token');
     const user = localStorage.getItem('auth_user');
@@ -63,6 +71,12 @@ const AdminView: React.FC = () => {
       fetchData();
     }
   }, [authenticated]);
+
+  useEffect(() => {
+    if (authenticated && activeTab === 'prompt') {
+      fetchPrompt(promptMode);
+    }
+  }, [authenticated, activeTab, promptMode]);
 
   // Fetch both datasets so the stat cards and tab counts are always accurate
   const fetchData = async () => {
@@ -82,6 +96,46 @@ const AdminView: React.FC = () => {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPrompt = async (mode: AnalysisMode) => {
+    setPromptLoading(true);
+    setPromptMessage('');
+    try {
+      const response = await fetch(`/api/prompt/current?analysisMode=${mode}`, { headers: getAuthHeaders() });
+      if (!response.ok) throw new Error('Prompt 加载失败');
+      const data = await response.json();
+      setPromptContent(data.content || '');
+      setPromptVersion(data.version ?? null);
+    } catch (error) {
+      setPromptMessage(error instanceof Error ? error.message : 'Prompt 加载失败');
+    } finally {
+      setPromptLoading(false);
+    }
+  };
+
+  const savePrompt = async () => {
+    if (!promptContent.trim()) {
+      setPromptMessage('Prompt 内容不能为空');
+      return;
+    }
+    setPromptSaving(true);
+    setPromptMessage('');
+    try {
+      const response = await fetch('/api/prompt/current', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ analysisMode: promptMode, content: promptContent }),
+      });
+      if (!response.ok) throw new Error('Prompt 保存失败');
+      const data = await response.json();
+      setPromptVersion(data.prompt?.version ?? null);
+      setPromptMessage('已保存为新版本');
+    } catch (error) {
+      setPromptMessage(error instanceof Error ? error.message : 'Prompt 保存失败');
+    } finally {
+      setPromptSaving(false);
     }
   };
 
@@ -139,7 +193,7 @@ const AdminView: React.FC = () => {
   ];
 
   return (
-    <div className="w-full animate-in fade-in duration-500">
+    <div className="w-full">
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <div className="bg-gradient-to-br from-indigo-500 to-violet-500 p-2 rounded-lg text-white shadow-lg shadow-indigo-500/20">
@@ -199,6 +253,21 @@ const AdminView: React.FC = () => {
         >
           <FileText className={`w-4 h-4 ${activeTab === 'reports' ? 'text-brand-600' : ''}`} />
           所有报告 ({reports.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('prompt');
+            setSelectedFeedback(null);
+            setSelectedReport(null);
+          }}
+          className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-lg transition-all ${
+            activeTab === 'prompt'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Bot className={`w-4 h-4 ${activeTab === 'prompt' ? 'text-brand-600' : ''}`} />
+          Prompt 管理
         </button>
       </div>
 
@@ -294,29 +363,29 @@ const AdminView: React.FC = () => {
 
                       {/* 展开的详细内容 */}
                       {selectedFeedback?.id === feedback.id && (
-                        <div className="mt-4 border-2 border-brand-200 rounded-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="mt-4 border-2 border-brand-200 rounded-lg overflow-hidden">
                           {/* 标签页切换 */}
                           <div className="bg-brand-50 border-b border-brand-200">
                             <div className="flex">
                               <button
                                 onClick={() => setFeedbackDetailTab('transcript')}
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                                className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
                                   feedbackDetailTab === 'transcript'
                                     ? 'bg-brand-100 text-brand-700'
                                     : 'text-brand-600 hover:bg-brand-100 hover:text-brand-800'
                                 }`}
                               >
-                                📄 面试原文
+                                <FileText className="w-4 h-4" /> 面试原文
                               </button>
                               <button
                                 onClick={() => setFeedbackDetailTab('assessment')}
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                                className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
                                   feedbackDetailTab === 'assessment'
                                     ? 'bg-brand-100 text-brand-700'
                                     : 'text-brand-600 hover:bg-brand-100 hover:text-brand-800'
                                 }`}
                               >
-                                🤖 评估结果
+                                <Bot className="w-4 h-4" /> 评估结果
                               </button>
                             </div>
                           </div>
@@ -349,7 +418,7 @@ const AdminView: React.FC = () => {
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'reports' ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
             <div className="p-6 border-b border-slate-200 flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">所有评估报告</h2>
@@ -411,29 +480,29 @@ const AdminView: React.FC = () => {
 
                       {/* 展开的详细内容 */}
                       {selectedReport?.id === report.id && (
-                        <div className="mt-4 border-2 border-brand-200 rounded-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="mt-4 border-2 border-brand-200 rounded-lg overflow-hidden">
                           {/* 标签页切换 */}
                           <div className="bg-brand-50 border-b border-brand-200">
                             <div className="flex">
                               <button
                                 onClick={() => setReportDetailTab('transcript')}
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                                className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
                                   reportDetailTab === 'transcript'
                                     ? 'bg-brand-100 text-brand-700'
                                     : 'text-brand-600 hover:bg-brand-100 hover:text-brand-800'
                                 }`}
                               >
-                                📄 面试原文
+                                <FileText className="w-4 h-4" /> 面试原文
                               </button>
                               <button
                                 onClick={() => setReportDetailTab('assessment')}
-                                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                                className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
                                   reportDetailTab === 'assessment'
                                     ? 'bg-brand-100 text-brand-700'
                                     : 'text-brand-600 hover:bg-brand-100 hover:text-brand-800'
                                 }`}
                               >
-                                🤖 评估结果
+                                <Bot className="w-4 h-4" /> 评估结果
                               </button>
                             </div>
                           </div>
@@ -466,14 +535,77 @@ const AdminView: React.FC = () => {
               </div>
             )}
           </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">系统 Prompt</h2>
+                <p className="mt-1 text-sm text-slate-500">招聘评估与个人复盘使用两套独立版本，修改互不影响。</p>
+              </div>
+              <div className="inline-flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+                {([
+                  ['recruiter', '判断他人'],
+                  ['candidate', '提升自己'],
+                ] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => setPromptMode(mode)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium ${promptMode === mode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="flex items-center justify-between gap-4 mb-3">
+                <label htmlFor="system-prompt" className="text-sm font-medium text-slate-700">
+                  {promptMode === 'candidate' ? 'Candidate Prompt' : 'Recruiter Prompt'}
+                </label>
+                <span className="text-xs text-slate-400">当前版本：{promptVersion ?? '—'}</span>
+              </div>
+              {promptLoading ? (
+                <div className="min-h-[420px] flex items-center justify-center text-sm text-slate-500">Prompt 加载中…</div>
+              ) : (
+                <textarea
+                  id="system-prompt"
+                  value={promptContent}
+                  onChange={(event) => setPromptContent(event.target.value)}
+                  spellCheck={false}
+                  className="w-full min-h-[520px] rounded-lg border border-slate-300 px-4 py-3 font-mono text-sm leading-relaxed text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                />
+              )}
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className={`text-sm ${promptMessage === '已保存为新版本' ? 'text-green-600' : 'text-red-600'}`}>{promptMessage}</div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => fetchPrompt(promptMode)}
+                    disabled={promptLoading || promptSaving}
+                    className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    放弃修改
+                  </button>
+                  <button
+                    onClick={savePrompt}
+                    disabled={promptLoading || promptSaving}
+                    className="px-5 py-2 rounded-lg bg-indigo-600 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {promptSaving ? '保存中…' : '保存为新版本'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )
       )}
 
       {/* 提示信息 */}
       <div className="mt-8 p-4 bg-brand-50 border border-brand-200 rounded-lg">
-        <h3 className="font-semibold text-brand-900 mb-2">💡 提示</h3>
+        <h3 className="font-semibold text-brand-900 mb-2 flex items-center gap-1.5">
+          <Lightbulb className="w-4 h-4" /> 提示
+        </h3>
         <p className="text-sm text-brand-800">
-          系统提示词的修改请直接编辑 data/systemPrompt.json 文件，然后重新部署。
+          Prompt 修改会创建新版本并立即用于后续分析；Candidate Prompt 暂不使用反馈自动迭代。
         </p>
       </div>
     </div>

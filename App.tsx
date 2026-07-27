@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { AnalysisState, AnalysisStatus } from './types';
+import { Routes, Route, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
+import { AnalysisInput, AnalysisMode, AnalysisState, AnalysisStatus, CandidateAnalysisInput } from './types';
 import { analyzeInterview } from './services/geminiService';
 import FileUpload from './components/FileUpload';
+import CandidateFileUpload from './components/CandidateFileUpload';
 import ReportView from './components/ReportView';
 import HistoryView from './components/HistoryView';
 import AdminView from './components/AdminView';
 import LoginPage from './src/components/LoginPage';
 import LandingPage from './components/LandingPage';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import {
+  consumePostLoginPath,
+  getRecentMode,
+  isAnalysisMode,
+  modeFromPath,
+  modePath,
+  rememberMode,
+} from './services/analysisMode';
 import {
   BrainCircuit, History, PlusCircle, Settings, LogOut, User, Menu, X,
   FileSearch, ScanSearch, Crosshair, Sparkles, Check,
@@ -46,7 +55,7 @@ const LoginRoute: React.FC = () => {
   }
 
   if (user) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={consumePostLoginPath() ?? modePath(getRecentMode(), 'app')} replace />;
   }
 
   return <LoginPage />;
@@ -65,10 +74,31 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   if (!user || !user.isAdmin) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={modePath(getRecentMode(), 'app')} replace />;
   }
 
   return <>{children}</>;
+};
+
+const LegacyModeRedirect: React.FC<{ area: 'app' | 'history' }> = ({ area }) => (
+  <Navigate to={modePath(getRecentMode(), area)} replace />
+);
+
+const ModeParamRoute: React.FC<{
+  children: (mode: AnalysisMode) => React.ReactNode;
+}> = ({ children }) => {
+  const { mode } = useParams();
+  const validMode = isAnalysisMode(mode) ? mode : null;
+
+  useEffect(() => {
+    if (validMode) rememberMode(validMode);
+  }, [validMode]);
+
+  if (!validMode) {
+    return <Navigate to={modePath('recruiter', 'app')} replace />;
+  }
+
+  return <>{children(validMode)}</>;
 };
 
 // Sidebar navigation definition
@@ -88,6 +118,7 @@ const TopNav: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const currentMode = modeFromPath(location.pathname) ?? getRecentMode();
 
   const handleLogout = async () => {
     try {
@@ -98,24 +129,31 @@ const TopNav: React.FC = () => {
     }
   };
 
-  const items = [...NAV_ITEMS];
+  const items = NAV_ITEMS.map((item) => ({
+    ...item,
+    path: item.path === '/app' ? modePath(currentMode, 'app') : modePath(currentMode, 'history'),
+  }));
   if (user?.isAdmin) {
     items.push({ label: '管理后台', path: '/admin', icon: Settings });
   }
 
-  const isActive = (path: string) =>
-    path === '/app' ? location.pathname === '/app' : location.pathname.startsWith(path);
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   const go = (path: string) => {
     navigate(path);
     setMobileOpen(false);
   };
 
+  const switchMode = (mode: AnalysisMode) => {
+    rememberMode(mode);
+    go(modePath(mode, 'app'));
+  };
+
   return (
     <header className="sticky top-0 z-30 bg-slate-900 text-slate-300 shadow-lg shadow-slate-900/10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 cursor-pointer flex-shrink-0" onClick={() => go('/app')}>
+        <div className="flex items-center gap-2.5 cursor-pointer flex-shrink-0" onClick={() => go(modePath(currentMode, 'app'))}>
           <div className="bg-gradient-to-br from-indigo-500 to-violet-500 p-1.5 rounded-lg text-white shadow-lg shadow-indigo-500/20">
             <BrainCircuit className="w-5 h-5" />
           </div>
@@ -126,6 +164,22 @@ const TopNav: React.FC = () => {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
+          <div className="flex items-center p-1 mr-2 rounded-full bg-white/5 border border-white/10" aria-label="分析模式">
+            {([
+              ['candidate', '提升自己'],
+              ['recruiter', '判断他人'],
+            ] as const).map(([mode, label]) => (
+              <button
+                key={mode}
+                onClick={() => switchMode(mode)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  currentMode === mode ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {items.map((item) => {
             const active = isActive(item.path);
             const Icon = item.icon;
@@ -185,7 +239,23 @@ const TopNav: React.FC = () => {
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-slate-800 px-4 py-3 space-y-1 animate-in slide-in-from-top-2 duration-200">
+        <div className="md:hidden border-t border-slate-800 px-4 py-3 space-y-1">
+          <div className="grid grid-cols-2 gap-2 pb-3 mb-2 border-b border-slate-800">
+            {([
+              ['candidate', '提升自己'],
+              ['recruiter', '判断他人'],
+            ] as const).map(([mode, label]) => (
+              <button
+                key={mode}
+                onClick={() => switchMode(mode)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  currentMode === mode ? 'bg-white text-slate-900' : 'bg-white/5 text-slate-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {items.map((item) => {
             const active = isActive(item.path);
             const Icon = item.icon;
@@ -240,19 +310,27 @@ const ANALYSIS_STAGES = [
   { label: '生成评估结论', icon: Sparkles },
 ];
 
-const AnalyzingProgress: React.FC = () => {
+const CANDIDATE_ANALYSIS_STAGES = [
+  { label: '解析面试与简历材料', icon: FileSearch },
+  { label: '识别关键问题与真实追问', icon: ScanSearch },
+  { label: '归纳核心改进问题', icon: Crosshair },
+  { label: '生成示范与训练建议', icon: Sparkles },
+];
+
+const AnalyzingProgress: React.FC<{ mode: AnalysisMode }> = ({ mode }) => {
   const [stage, setStage] = useState(0);
+  const stages = mode === 'candidate' ? CANDIDATE_ANALYSIS_STAGES : ANALYSIS_STAGES;
 
   useEffect(() => {
     // Illustrative staged progress: advance on a timer, hold on the last stage
     const timer = setInterval(() => {
-      setStage((s) => Math.min(s + 1, ANALYSIS_STAGES.length - 1));
+      setStage((s) => Math.min(s + 1, stages.length - 1));
     }, 2500);
     return () => clearInterval(timer);
-  }, []);
+  }, [stages.length]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in duration-500">
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
       <div className="relative">
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-300 to-violet-300 blur-xl rounded-full opacity-50 animate-pulse"></div>
         <Sparkles className="w-14 h-14 text-brand-600 relative z-10 animate-bounce" />
@@ -263,7 +341,7 @@ const AnalyzingProgress: React.FC = () => {
       </p>
 
       <div className="mt-10 w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-        {ANALYSIS_STAGES.map((s, i) => {
+        {stages.map((s, i) => {
           const Icon = s.icon;
           const done = i < stage;
           const current = i === stage;
@@ -319,6 +397,8 @@ const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 // 主应用内容
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const routeMode = modeFromPath(location.pathname);
   const [analysisState, setAnalysisState] = useState<AnalysisState>({
     status: AnalysisStatus.IDLE,
     result: null,
@@ -326,40 +406,63 @@ const AppContent: React.FC = () => {
     fileName: null,
   });
 
-  const handleStartAnalysis = async (data: {
-    content: string;
-    fileName: string;
-    jobTitle: string;
-    competencies: string
-  }) => {
+  useEffect(() => {
+    if (!routeMode) return;
+    setAnalysisState({
+      status: AnalysisStatus.IDLE,
+      result: null,
+      error: null,
+      fileName: null,
+      analysisMode: routeMode,
+    });
+  }, [routeMode]);
+
+  const runAnalysis = async (input: AnalysisInput) => {
     setAnalysisState((prev) => ({
       ...prev,
       status: AnalysisStatus.ANALYZING,
-      fileName: data.fileName,
+      fileName: input.fileName,
+      analysisMode: input.analysisMode,
+      jobDescription: input.analysisMode === 'candidate' ? input.jobDescription : null,
+      resumeFileName: input.analysisMode === 'candidate' ? input.resumeFile?.name ?? null : null,
+      resumeParseStatus: input.analysisMode === 'candidate' ? input.resumeParseStatus : null,
       error: null,
     }));
 
     try {
-      const { result, reportId } = await analyzeInterview(
-        data.content,
-        data.jobTitle,
-        data.competencies,
-        data.fileName
-      );
-
+      const { result, reportId } = await analyzeInterview(input);
       setAnalysisState((prev) => ({
         ...prev,
         status: AnalysisStatus.COMPLETE,
         result,
-        reportId
+        reportId,
       }));
     } catch (error: any) {
       setAnalysisState((prev) => ({
         ...prev,
         status: AnalysisStatus.ERROR,
-        error: error.message || "分析过程中出现错误，请稍后重试。",
+        error: error.message || '分析过程中出现错误，请稍后重试。',
       }));
     }
+  };
+
+  const handleStartAnalysis = (data: {
+    content: string;
+    fileName: string;
+    jobTitle: string;
+    competencies: string
+  }) => {
+    void runAnalysis({
+      analysisMode: 'recruiter',
+      transcript: data.content,
+      fileName: data.fileName,
+      jobTitle: data.jobTitle,
+      competencies: data.competencies,
+    });
+  };
+
+  const handleCandidateStartAnalysis = (input: CandidateAnalysisInput) => {
+    void runAnalysis(input);
   };
 
   const handleReset = () => {
@@ -368,8 +471,9 @@ const AppContent: React.FC = () => {
       result: null,
       error: null,
       fileName: null,
+      analysisMode: routeMode ?? getRecentMode(),
     });
-    navigate('/app');
+    navigate(modePath(routeMode ?? getRecentMode(), 'app'));
   };
 
   return (
@@ -381,32 +485,37 @@ const AppContent: React.FC = () => {
       <Route path="/login" element={<LoginRoute />} />
 
       {/* 受保护的路由 */}
-      <Route path="/app" element={
+      <Route path="/app" element={<LegacyModeRedirect area="app" />} />
+      <Route path="/app/:mode" element={
         <ProtectedRoute>
+          <ModeParamRoute>{(mode) => (
           <AppShell>
             {analysisState.status === AnalysisStatus.IDLE && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="space-y-8">
                 <div className="text-center max-w-4xl mx-auto mb-10">
                   <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight">
-                    让每一次面试评估更{' '}
+                    {mode === 'candidate' ? '复盘每一次面试，让自己更' : '让每一次面试评估更'}{' '}
                     <span className="bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent">
-                      精准
+                      {mode === 'candidate' ? '出色' : '精准'}
                     </span>
                   </h2>
                   <p className="text-base md:text-lg text-slate-600 leading-relaxed md:whitespace-nowrap">
-                    上传面试记录，AI 将基于 STAR 法则分析行为证据，结合人岗匹配度生成专业的录用建议。
+                    {mode === 'candidate'
+                      ? '上传你的面试记录，AI 将优先依据真实追问，找出核心问题并给出下一次可直接使用的改进建议。'
+                      : '上传面试记录，AI 将基于 STAR 法则分析行为证据，结合人岗匹配度生成专业的录用建议。'}
                   </p>
                 </div>
 
-                <FileUpload
-                  onStartAnalysis={handleStartAnalysis}
-                  isLoading={false}
-                />
+                {mode === 'candidate' ? (
+                  <CandidateFileUpload onStartAnalysis={handleCandidateStartAnalysis} isLoading={false} />
+                ) : (
+                  <FileUpload onStartAnalysis={handleStartAnalysis} isLoading={false} />
+                )}
               </div>
             )}
 
             {analysisState.status === AnalysisStatus.ANALYZING && (
-              <AnalyzingProgress />
+              <AnalyzingProgress mode={mode} />
             )}
 
             {analysisState.status === AnalysisStatus.COMPLETE && (
@@ -417,7 +526,7 @@ const AppContent: React.FC = () => {
             )}
 
             {analysisState.status === AnalysisStatus.ERROR && (
-              <div className="max-w-xl mx-auto mt-12 text-center p-8 bg-white rounded-2xl shadow-sm border border-slate-200 animate-in zoom-in-95 duration-300">
+              <div className="max-w-xl mx-auto mt-12 text-center p-8 bg-white rounded-2xl shadow-sm border border-slate-200">
                 <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 90011-18 0 9 900118 0zm-9 3.75h.008v.008H12v-.008z" />
@@ -434,14 +543,18 @@ const AppContent: React.FC = () => {
               </div>
             )}
           </AppShell>
+          )}</ModeParamRoute>
         </ProtectedRoute>
       } />
 
-      <Route path="/history" element={
+      <Route path="/history" element={<LegacyModeRedirect area="history" />} />
+      <Route path="/history/:mode" element={
         <ProtectedRoute>
-          <AppShell>
-            <HistoryView />
-          </AppShell>
+          <ModeParamRoute>{(mode) => (
+            <AppShell>
+              <HistoryView mode={mode} />
+            </AppShell>
+          )}</ModeParamRoute>
         </ProtectedRoute>
       } />
       <Route path="/report/:id" element={

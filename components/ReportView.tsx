@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnalysisState, Report } from '../types';
+import { getRecentMode, modePath } from '../services/analysisMode';
 
 // 辅助函数：获取带认证的请求头
 const getAuthHeaders = () => {
@@ -41,22 +42,18 @@ interface DimensionScore {
 // Rating scale, low to high
 const RATING_ORDER = ['NH', 'H-', 'H', 'H+', 'MH'];
 
+const resumeStatusLabels: Record<string, string> = {
+  usable: '简历解析可用',
+  low_quality: '简历解析质量较低',
+  empty: '简历未识别到正文',
+  manual: '简历文本已人工确认',
+};
+
 // Extract overall fit score from the report text
 const getOverallScore = (text: string) => {
   // Expected format: "**匹配结论**: H+" (bold markers may wrap label and/or value)
   const match = text.match(/(?:综合建议|匹配结论)\**\s*[：:]\s*\**\s*(MH|NH|H\+|H-|H)(?![+\-A-Za-z])/);
   return match ? match[1] : 'N/A';
-};
-
-// Badge styling per rating (H+/MH -> brand gradient, H -> green, H- -> amber, NH -> red)
-const getScoreBadgeClass = (score: string) => {
-  if (score === 'MH' || score === 'H+') {
-    return 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white border-transparent';
-  }
-  if (score === 'H') return 'bg-green-50 border-green-200 text-green-800';
-  if (score === 'H-') return 'bg-amber-50 border-amber-200 text-amber-800';
-  if (score === 'NH') return 'bg-red-50 border-red-200 text-red-800';
-  return 'bg-slate-50 border-slate-200 text-slate-600';
 };
 
 // Split report markdown into sections by "## " headings; tolerant of missing structure
@@ -163,7 +160,11 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
               result: report.result,
               error: null,
               fileName: report.fileName,
-              reportId: report.id
+              reportId: report.id,
+              analysisMode: report.analysisMode ?? 'recruiter',
+              jobDescription: report.jobDescription,
+              resumeFileName: report.resumeFileName,
+              resumeParseStatus: report.resumeParseStatus,
             });
             setCreatedAt(report.createdAt || null);
           } else {
@@ -190,8 +191,13 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
     }
   }, [id, initialAnalysis]);
 
+  const reportMode = analysis?.analysisMode ?? 'recruiter';
+  const isCandidate = reportMode === 'candidate';
   const sections = useMemo(() => splitSections(analysis?.result || ''), [analysis?.result]);
-  const dimensions = useMemo(() => parseDimensions(analysis?.result || ''), [analysis?.result]);
+  const dimensions = useMemo(
+    () => isCandidate ? [] : parseDimensions(analysis?.result || ''),
+    [analysis?.result, isCandidate]
+  );
 
   // Track the currently visible section for TOC highlighting
   useEffect(() => {
@@ -272,6 +278,26 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
     }
   };
 
+  const handleDownloadResume = async () => {
+    const reportId = analysis?.reportId || id;
+    if (!reportId || !analysis?.resumeFileName) return;
+    try {
+      const response = await fetch(`/api/reports/${reportId}/resume`, { headers: getAuthHeaders() });
+      if (!response.ok) throw new Error('Resume download failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = analysis.resumeFileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.alert('简历源文件暂时无法下载。');
+    }
+  };
+
   const handleShare = async () => {
     const reportId = analysis?.reportId || id;
     if (!reportId) return;
@@ -295,7 +321,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       });
       if (res.ok) {
         if (onReset) onReset();
-        else navigate('/app');
+        else navigate(modePath(reportMode, 'app'));
       }
     } catch (e) {
       console.error("Failed to delete", e);
@@ -360,33 +386,38 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       <div className="max-w-xl mx-auto mt-20 text-center">
         <h3 className="text-xl font-bold text-slate-900">报告未找到</h3>
         <p className="text-slate-500 mt-2 mb-6">{analysis?.error || "该报告不存在或已被删除。"}</p>
-        <button onClick={() => navigate('/app')} className="text-brand-600 font-medium hover:underline">
+        <button onClick={() => navigate(modePath(getRecentMode(), 'app'))} className="text-brand-600 font-medium hover:underline">
           返回新建分析
         </button>
       </div>
     );
   }
 
-  const score = analysis.result ? getOverallScore(analysis.result) : null;
+  const score = !isCandidate && analysis.result ? getOverallScore(analysis.result) : null;
+  const feedbackIssues = isCandidate
+    ? ['核心问题不准确', '证据引用不准确', '示范回答不实用', '行动建议不具体', '遗漏重要问题', '其他问题']
+    : ['评分标准不准确', 'STAR法则应用不当', '人岗匹配分析错误', '维度评估不全面', '风险提示不清晰', '其他问题'];
 
   return (
-    <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+    <div className="w-full pb-20">
 
       <div className="xl:flex xl:items-start xl:gap-6">
         {/* Main column, captured for PDF. Toolbar/chips are ignored via data-html2canvas-ignore. */}
         <div ref={contentRef} className="flex-1 min-w-0">
 
-          {/* Score Hero */}
+          {/* Report Hero */}
           <div className="bg-gradient-to-r from-indigo-500 to-violet-500 rounded-2xl shadow-lg shadow-indigo-500/20 p-6 md:p-8 text-white mb-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <CheckCircle2 className="w-5 h-5 text-white/90" />
                   <span className="text-xs font-semibold uppercase tracking-wider text-white/80">
-                    {id ? '评估报告' : '评估完成'}
+                    {isCandidate ? (id ? '个人复盘报告' : '复盘完成') : (id ? '评估报告' : '评估完成')}
                   </span>
                 </div>
-                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">人岗匹配评估</h1>
+                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+                  {isCandidate ? '面试复盘与提升建议' : '人岗匹配评估'}
+                </h1>
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/80">
                   {analysis.fileName && (
                     <span className="flex items-center gap-1.5">
@@ -400,8 +431,19 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
                       {new Date(createdAt).toLocaleString('zh-CN')}
                     </span>
                   )}
+                  {isCandidate && analysis.resumeFileName && (
+                    <span className="flex items-center gap-1.5">
+                      <FileText className="w-4 h-4" />
+                      {analysis.resumeFileName}
+                    </span>
+                  )}
                   <span className="text-white/60">由 Eval Bar AI 生成</span>
                 </div>
+                {isCandidate && analysis.resumeParseStatus && resumeStatusLabels[analysis.resumeParseStatus] && (
+                  <div className="mt-3 inline-flex rounded-full bg-white/10 border border-white/20 px-2.5 py-1 text-xs text-white/80">
+                    {resumeStatusLabels[analysis.resumeParseStatus]}
+                  </div>
+                )}
               </div>
 
               {score && (
@@ -416,7 +458,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
           {/* Action toolbar (excluded from PDF) */}
           <div className="flex flex-wrap items-center gap-3 mb-6" data-html2canvas-ignore="true">
             <button
-              onClick={onReset ? onReset : () => navigate('/app')}
+              onClick={onReset ? onReset : () => navigate(modePath(reportMode, 'app'))}
               className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
             >
               <RefreshCw className="w-4 h-4" />
@@ -448,6 +490,16 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
               <Download className="w-4 h-4" />
               {isGeneratingPdf ? '生成中…' : '导出 PDF'}
             </button>
+
+            {isCandidate && analysis.resumeFileName && (analysis.reportId || id) && (
+              <button
+                onClick={handleDownloadResume}
+                className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+              >
+                <Download className="w-4 h-4" />
+                下载简历源文件
+              </button>
+            )}
 
             {(analysis.reportId || id) && (
               <button
@@ -606,7 +658,9 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
 
       {/* Feedback Section */}
       <div className="mt-12 bg-white rounded-xl shadow-lg border border-slate-100 p-8">
-        <h3 className="text-xl font-bold text-slate-900 mb-6">帮助我们改进 AI 评估</h3>
+        <h3 className="text-xl font-bold text-slate-900 mb-6">
+          {isCandidate ? '这份复盘建议是否有帮助？' : '帮助我们改进 AI 评估'}
+        </h3>
 
         {feedbackSubmitted ? (
           <div className="text-center py-8">
@@ -614,12 +668,14 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <h4 className="text-lg font-semibold text-slate-900 mb-2">感谢您的反馈！</h4>
-            <p className="text-slate-500">您的反馈有助于我们提升 AI 评估的准确性。</p>
+            <p className="text-slate-500">您的反馈有助于我们提升 AI {isCandidate ? '复盘建议' : '评估'}的准确性。</p>
           </div>
         ) : (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-3">本次评估的准确度如何？</label>
+              <label className="block text-sm font-medium text-slate-700 mb-3">
+                {isCandidate ? '这份建议对下一次面试有多大帮助？' : '本次评估的准确度如何？'}
+              </label>
               <div className="flex items-center gap-4">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
@@ -637,14 +693,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">具体问题（可多选）：</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {[
-                  '评分标准不准确',
-                  'STAR法则应用不当',
-                  '人岗匹配分析错误',
-                  '维度评估不全面',
-                  '风险提示不清晰',
-                  '其他问题'
-                ].map((issue) => (
+                {feedbackIssues.map((issue) => (
                   <div key={issue} className="flex items-center">
                     <input
                       type="checkbox"
@@ -697,7 +746,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       </div>
 
       <div className="text-center mt-8 text-slate-400 text-xs">
-          机密 • Eval Bar AI 评估
+          机密 • Eval Bar AI {isCandidate ? '个人复盘' : '评估'}
       </div>
     </div>
   );

@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2, Calendar, FileText, Share2, PlusCircle, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { Report } from '../types';
+import { AnalysisMode, Report } from '../types';
+import { ScoreBadge, getScoreBadgeClass } from './ui';
+import { modePath } from '../services/analysisMode';
 
 // 辅助函数：获取带认证的请求头
 const getAuthHeaders = () => {
@@ -23,32 +25,22 @@ const getOverallScore = (text: string) => {
   return match ? match[1] : null;
 };
 
-// Badge styling per rating (H+/MH -> brand gradient, H -> green, H- -> amber, NH -> red)
-const getScoreBadgeClass = (score: string) => {
-  if (score === 'MH' || score === 'H+') {
-    return 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white border-transparent';
-  }
-  if (score === 'H') return 'bg-green-50 border-green-200 text-green-800';
-  if (score === 'H-') return 'bg-amber-50 border-amber-200 text-amber-800';
-  if (score === 'NH') return 'bg-red-50 border-red-200 text-red-800';
-  return 'bg-slate-50 border-slate-200 text-slate-600';
-};
-
 const RATING_ORDER = ['MH', 'H+', 'H', 'H-', 'NH'];
 
-const HistoryView: React.FC = () => {
+const HistoryView: React.FC<{ mode: AnalysisMode }> = ({ mode }) => {
   const navigate = useNavigate();
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copyingId, setCopyingId] = useState<string | null>(null);
 
   useEffect(() => {
+    setIsLoading(true);
     fetchReports();
-  }, []);
+  }, [mode]);
 
   const fetchReports = async () => {
     try {
-      const res = await fetch('/api/reports', { headers: getAuthHeaders() });
+      const res = await fetch(`/api/reports?analysisMode=${mode}`, { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setReports(data);
@@ -89,10 +81,10 @@ const HistoryView: React.FC = () => {
   const scores = useMemo(() => {
     const map: Record<string, string | null> = {};
     reports.forEach((r) => {
-      map[r.id] = r.result ? getOverallScore(r.result) : null;
+      map[r.id] = mode === 'recruiter' && r.result ? getOverallScore(r.result) : null;
     });
     return map;
-  }, [reports]);
+  }, [reports, mode]);
 
   const ratingCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -103,11 +95,14 @@ const HistoryView: React.FC = () => {
   }, [scores]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto animate-in fade-in duration-500">
+    <div className="w-full max-w-4xl mx-auto">
       <div className="flex items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">评估历史记录</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">{mode === 'candidate' ? '个人复盘历史' : '评估历史记录'}</h1>
+          <p className="mt-1 text-sm text-slate-500">仅显示「{mode === 'candidate' ? '提升自己' : '判断他人'}」模式下的报告。</p>
+        </div>
         <button
-          onClick={() => navigate('/app')}
+          onClick={() => navigate(modePath(mode, 'app'))}
           className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg text-sm font-medium hover:from-indigo-600 hover:to-violet-600 transition-all shadow-sm"
         >
           <PlusCircle className="w-4 h-4" />
@@ -122,7 +117,12 @@ const HistoryView: React.FC = () => {
             <BarChart3 className="w-3.5 h-3.5 text-brand-600" />
             共 {reports.length} 份报告
           </span>
-          {RATING_ORDER.filter((r) => ratingCounts[r]).map((rating) => (
+          {mode === 'candidate' && (
+            <span className="px-3 py-1.5 bg-violet-50 border border-violet-100 rounded-full text-xs text-violet-700">
+              {reports.filter((report) => report.resumeFileName).length} 份使用了简历
+            </span>
+          )}
+          {mode === 'recruiter' && RATING_ORDER.filter((r) => ratingCounts[r]).map((rating) => (
             <span
               key={rating}
               className={`px-3 py-1.5 rounded-full text-xs font-bold border ${getScoreBadgeClass(rating)}`}
@@ -143,7 +143,7 @@ const HistoryView: React.FC = () => {
           <h3 className="text-lg font-medium text-slate-900">暂无报告</h3>
           <p className="text-slate-500 mt-2 mb-6">新建分析后，历史记录将显示在这里。</p>
           <button
-            onClick={() => navigate('/app')}
+            onClick={() => navigate(modePath(mode, 'app'))}
             className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-violet-600 transition-all"
           >
             新建分析
@@ -152,7 +152,7 @@ const HistoryView: React.FC = () => {
       ) : (
         <div className="grid gap-4">
           {reports.map((report) => {
-            const score = scores[report.id];
+            const score = mode === 'recruiter' ? scores[report.id] : null;
             return (
               <div
                 key={report.id}
@@ -165,9 +165,10 @@ const HistoryView: React.FC = () => {
                       <h3 className="text-lg font-semibold text-slate-900 group-hover:text-brand-600 transition-colors">
                         {report.jobTitle}
                       </h3>
-                      {score && (
-                        <span className={`px-2.5 py-0.5 rounded-md text-xs font-bold border ${getScoreBadgeClass(score)}`}>
-                          {score}
+                      {score && <ScoreBadge score={score} />}
+                      {mode === 'candidate' && (
+                        <span className="px-2.5 py-0.5 rounded-md text-xs bg-violet-50 text-violet-700 border border-violet-100">
+                          提升自己
                         </span>
                       )}
                     </div>
@@ -176,6 +177,12 @@ const HistoryView: React.FC = () => {
                         <FileText className="w-4 h-4" />
                         {report.fileName}
                       </div>
+                      {mode === 'candidate' && report.resumeFileName && (
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="w-4 h-4" />
+                          已参考简历：{report.resumeFileName}
+                        </div>
+                      )}
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-4 h-4" />
                         {format(new Date(report.createdAt), 'PPP p', { locale: zhCN })}
