@@ -1,31 +1,54 @@
-// 辅助函数：获取带认证的请求头
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('auth_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+import type { AnalysisInput } from '../types';
+
+const authHeaders = (token: string | null): Headers => {
+  const headers = new Headers();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
   return headers;
 };
 
+export const buildAnalysisRequest = (
+  input: AnalysisInput,
+  token: string | null = typeof window === 'undefined' ? null : window.localStorage.getItem('auth_token')
+): { headers: Headers; body: BodyInit } => {
+  const headers = authHeaders(token);
+
+  if (input.analysisMode === 'candidate' && input.resumeFile) {
+    const body = new FormData();
+    body.set('analysisMode', input.analysisMode);
+    body.set('jobTitle', input.jobTitle);
+    body.set('jobDescription', input.jobDescription);
+    body.set('transcript', input.transcript);
+    body.set('fileName', input.fileName);
+    body.set('resumeText', input.resumeText);
+    body.set('resumeParseStatus', input.resumeParseStatus);
+    body.set('resumeFile', input.resumeFile);
+    return { headers, body };
+  }
+
+  headers.set('Content-Type', 'application/json');
+  const body = input.analysisMode === 'candidate'
+    ? JSON.stringify({
+      analysisMode: input.analysisMode,
+      jobTitle: input.jobTitle,
+      jobDescription: input.jobDescription,
+      transcript: input.transcript,
+      fileName: input.fileName,
+      resumeText: input.resumeText,
+      resumeParseStatus: input.resumeParseStatus,
+    })
+    : JSON.stringify(input);
+  return { headers, body };
+};
+
 export const analyzeInterview = async (
-  transcript: string, 
-  jobTitle: string, 
-  competencies: string,
-  fileName: string
+  input: AnalysisInput
 ): Promise<{ result: string; reportId: string }> => {
+  const request = buildAnalysisRequest(input);
   try {
     const response = await fetch('/api/analyze', {
       method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        transcript,
-        jobTitle,
-        competencies,
-        fileName
-      }),
+      headers: request.headers,
+      body: request.body,
     });
 
     if (!response.ok) {
@@ -33,10 +56,9 @@ export const analyzeInterview = async (
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
-    return data;
+    return await response.json();
   } catch (error) {
-    console.error("Gemini Analysis Error:", error);
+    console.error('Analysis request failed:', error instanceof Error ? error.name : 'Error');
     throw error;
   }
 };
