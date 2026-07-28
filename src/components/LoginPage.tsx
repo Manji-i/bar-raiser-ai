@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, UserPlus } from 'lucide-react';
+import { LogIn, Target, UserCheck, UserPlus } from 'lucide-react';
 import { Button, Input, IconTile } from '../../components/ui';
-import { consumePostLoginPath, getRecentMode, modePath } from '../../services/analysisMode';
-
-const resolveLoginDestination = () =>
-  consumePostLoginPath() ?? modePath(getRecentMode(), 'app');
+import {
+  consumePostLoginMode,
+  modePath,
+  type AnalysisMode,
+} from '../../services/analysisMode';
 
 const LoginPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -15,16 +16,18 @@ const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<AnalysisMode>(
+    () => consumePostLoginMode() ?? 'recruiter',
+  );
   
-  const { login, register, user } = useAuth();
+  const { login, register, user, analysisMode } = useAuth();
   const navigate = useNavigate();
 
-  // 如果已经登录，重定向到主应用
   useEffect(() => {
-    if (user) {
-      navigate(resolveLoginDestination(), { replace: true });
+    if (user && analysisMode) {
+      navigate(modePath(analysisMode, 'app'), { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, analysisMode, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,11 +36,11 @@ const LoginPage: React.FC = () => {
 
     try {
       if (isLogin) {
-        await login(username, password);
+        await login(username, password, selectedMode);
       } else {
-        await register(username, password, email || undefined);
+        await register(username, password, selectedMode, email || undefined);
       }
-      navigate(resolveLoginDestination(), { replace: true });
+      navigate(modePath(selectedMode, 'app'), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败，请稍后重试');
     } finally {
@@ -65,6 +68,34 @@ const LoginPage: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <fieldset>
+            <legend className="block text-sm font-medium text-slate-700 mb-2">
+              使用角色
+            </legend>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant={selectedMode === 'candidate' ? 'primary' : 'secondary'}
+                aria-pressed={selectedMode === 'candidate'}
+                onClick={() => setSelectedMode('candidate')}
+                className="min-h-20 flex-col"
+              >
+                <Target className="w-5 h-5" />
+                <span>提升自己</span>
+              </Button>
+              <Button
+                type="button"
+                variant={selectedMode === 'recruiter' ? 'primary' : 'secondary'}
+                aria-pressed={selectedMode === 'recruiter'}
+                onClick={() => setSelectedMode('recruiter')}
+                className="min-h-20 flex-col"
+              >
+                <UserCheck className="w-5 h-5" />
+                <span>判断他人</span>
+              </Button>
+            </div>
+          </fieldset>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               用户名

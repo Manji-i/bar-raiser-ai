@@ -1,4 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  ANALYSIS_MODE_KEY,
+  AUTH_MODE_KEY,
+  POST_LOGIN_PATH_KEY,
+  clearAuthMode,
+  clearPostLoginMode,
+  getAuthMode,
+  setAuthMode,
+  type AnalysisMode,
+} from '../../services/analysisMode';
 
 interface User {
   id: string;
@@ -10,30 +20,66 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string, email?: string) => Promise<void>;
+  analysisMode: AnalysisMode | null;
+  login: (username: string, password: string, analysisMode: AnalysisMode) => Promise<void>;
+  register: (
+    username: string,
+    password: string,
+    analysisMode: AnalysisMode,
+    email?: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AUTH_STORAGE_KEYS = new Set(['auth_token', 'auth_user', AUTH_MODE_KEY]);
+
+const clearStoredAuth = () => {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_user');
+  localStorage.removeItem('admin');
+  localStorage.removeItem(ANALYSIS_MODE_KEY);
+  sessionStorage.removeItem(POST_LOGIN_PATH_KEY);
+  clearAuthMode();
+  clearPostLoginMode();
+};
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 从localStorage恢复登录状态
     const savedToken = localStorage.getItem('auth_token');
     const savedUser = localStorage.getItem('auth_user');
-    
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+    const savedMode = getAuthMode();
+
+    if (savedToken && savedUser && savedMode) {
+      try {
+        setToken(savedToken);
+        setUser(JSON.parse(savedUser));
+        setAnalysisMode(savedMode);
+      } catch {
+        clearStoredAuth();
+      }
+    } else {
+      clearStoredAuth();
     }
-    
+
     setLoading(false);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea === localStorage && (!event.key || AUTH_STORAGE_KEYS.has(event.key))) {
+        setUser(null);
+        setToken(null);
+        setAnalysisMode(null);
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   // 辅助函数：带认证的请求
@@ -51,13 +97,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return response;
   };
 
-  const setAuthData = (newToken: string, newUser: User) => {
+  const setAuthData = (newToken: string, newUser: User, newAnalysisMode: AnalysisMode) => {
     setUser(newUser);
     setToken(newToken);
+    setAnalysisMode(newAnalysisMode);
     
     // 保存到localStorage
     localStorage.setItem('auth_token', newToken);
     localStorage.setItem('auth_user', JSON.stringify(newUser));
+    setAuthMode(newAnalysisMode);
     
     // 设置admin标识
     if (newUser.isAdmin) {
@@ -67,7 +115,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string, analysisMode: AnalysisMode) => {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -80,10 +128,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const data = await response.json();
-    setAuthData(data.token, data.user);
+    setAuthData(data.token, data.user, analysisMode);
   };
 
-  const register = async (username: string, password: string, email?: string) => {
+  const register = async (
+    username: string,
+    password: string,
+    analysisMode: AnalysisMode,
+    email?: string,
+  ) => {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -96,7 +149,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const data = await response.json();
-    setAuthData(data.token, data.user);
+    setAuthData(data.token, data.user, analysisMode);
   };
 
   const logout = async () => {
@@ -110,17 +163,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     setUser(null);
     setToken(null);
-    
-    // 清除localStorage
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('admin');
+    setAnalysisMode(null);
+    clearStoredAuth();
   };
 
   return (
     <AuthContext.Provider value={{ 
       user, 
       token, 
+      analysisMode,
       login, 
       register, 
       logout, 

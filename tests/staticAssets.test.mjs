@@ -7,6 +7,14 @@ const recruiterUpload = readFileSync(
   new URL('../components/FileUpload.tsx', import.meta.url),
   'utf8',
 );
+const authContext = readFileSync(
+  new URL('../src/context/AuthContext.tsx', import.meta.url),
+  'utf8',
+);
+const loginPage = readFileSync(
+  new URL('../src/components/LoginPage.tsx', import.meta.url),
+  'utf8',
+);
 
 test('页面入口不引用不存在的 index.css', () => {
   assert.doesNotMatch(indexHtml, /href=["']\/index\.css["']/);
@@ -17,4 +25,19 @@ test('招聘方上传页不使用未安装的 Tailwind 动画或未定义工具�
     recruiterUpload,
     /\b(?:animate-in|fade-in|slide-in-from-[^\s"'`]+|hide-scrollbar)\b/,
   );
+});
+
+test('登录与注册显式绑定角色，认证上下文缺少角色时拒绝恢复会话', () => {
+  assert.match(authContext, /analysisMode:\s*AnalysisMode\s*\|\s*null/);
+  assert.match(authContext, /savedToken\s*&&\s*savedUser\s*&&\s*savedMode/);
+  assert.match(authContext, /login:\s*\([^)]*analysisMode:\s*AnalysisMode/);
+  assert.match(authContext, /register:\s*\([^)]*analysisMode:\s*AnalysisMode/);
+});
+
+test('登录页提供两个角色选项且主按钮只显示登录或注册', () => {
+  assert.match(loginPage, /提升自己/);
+  assert.match(loginPage, /判断他人/);
+  assert.match(loginPage, /await login\(username, password, selectedMode\)/);
+  assert.match(loginPage, /await register\(username, password, selectedMode,/);
+  assert.doesNotMatch(loginPage, /以.+身份(?:登录|注册)/);
 });
