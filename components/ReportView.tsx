@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import {
   Download, RefreshCw, CheckCircle2, FileDown, Share2, Trash2, Star,
   ChevronDown, ChevronsUpDown, ChevronsDownUp, Calendar, FileText,
+  Sparkles, AlertTriangle, Quote, ListChecks,
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnalysisMode, AnalysisState, Report } from '../types';
@@ -99,6 +100,256 @@ const parseDimensions = (markdown: string): DimensionScore[] => {
   }
   return dims;
 };
+
+// ---------- Candidate report structured parsing ----------
+
+interface CandidateConclusionItem {
+  label: string;
+  text: string;
+}
+
+interface CandidateStrength {
+  title: string;
+  evidence: string;
+}
+
+interface CandidateProblemField {
+  label: string;
+  text: string;
+}
+
+interface CandidateProblem {
+  rootCause: string;
+  fields: CandidateProblemField[];
+}
+
+interface CandidateReportData {
+  conclusion: { id: string; title: string; items: CandidateConclusionItem[] };
+  strengths: { id: string; title: string; items: CandidateStrength[] } | null;
+  problems: { id: string; title: string; items: CandidateProblem[] };
+  checklist: { id: string; title: string; items: string[] } | null;
+}
+
+// Parse a leading "**label：**text" / "**label**: text" prefix; returns null when absent
+const parseLabeledText = (text: string): { label: string; text: string } | null => {
+  const m = text.match(/^\*\*([^*]+?)\*\*\s*[：:]?\s*([\s\S]+)$/);
+  if (!m) return null;
+  const label = m[1].replace(/[：:]\s*$/, '').replace(/^[\[【]|[\]】]$/g, '').trim();
+  return { label, text: m[2].trim() };
+};
+
+const stripBulletMarker = (line: string) => line.replace(/^\s*[-*]\s+/, '');
+const stripNumberMarker = (line: string) => line.replace(/^\s*\d+\s*[.、．]\s*/, '');
+
+// Parse the candidate coaching report into structured blocks; returns null when the
+// expected sections are missing so the caller can fall back to generic markdown rendering
+const parseCandidateReport = (sections: ReportSection[]): CandidateReportData | null => {
+  const findSection = (...keywords: string[]) =>
+    sections.find((s) => keywords.some((k) => s.title.includes(k)));
+
+  const conclusionSec = findSection('结论');
+  const strengthsSec = findSection('值得保留', '亮点');
+  const problemsSec = findSection('核心问题');
+  const checklistSec = findSection('准备清单');
+  if (!conclusionSec || !problemsSec) return null;
+
+  // 结论：优先解析「**标签：** 一句话」；老报告没有标签时退化为整段文本（label 为空）
+  let conclusionItems = conclusionSec.body
+    .split(/\n\s*\n/)
+    .map((p) => parseLabeledText(stripNumberMarker(stripBulletMarker(p.replace(/\n/g, ' ').trim()))))
+    .filter((x): x is CandidateConclusionItem => !!x && !!x.text);
+  if (conclusionItems.length === 0) {
+    // 老报告无标签：段落按句号/问号/叹号拆成单句，渲染为无序列表
+    conclusionItems = conclusionSec.body
+      .split(/\n\s*\n/)
+      .flatMap((p) => p.replace(/\n/g, ' ').trim().split(/(?<=[。！？])/))
+      .map((text) => text.trim())
+      .filter(Boolean)
+      .map((text) => ({ label: '', text }));
+  }
+  if (conclusionItems.length === 0) return null;
+
+  // 亮点：- **标题**：证据（也兼容无加粗标题的纯文本条目）
+  const strengthItems = (strengthsSec?.body || '')
+    .split('\n')
+    .filter((l) => /^\s*[-*]\s+/.test(l))
+    .map((l) => {
+      const parsed = parseLabeledText(stripBulletMarker(l).trim());
+      return parsed
+        ? { title: parsed.label, evidence: parsed.text }
+        : { title: '', evidence: stripBulletMarker(l).trim() };
+    })
+    .filter((s) => s.evidence);
+
+  // 核心问题：### N. 根因，正文为「- **字段**：内容」列表
+  const problemItems: CandidateProblem[] = [];
+  const blocks = problemsSec.body.split(/^###\s+/m);
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i];
+    const newlineIdx = block.indexOf('\n');
+    const rootCause = stripNumberMarker((newlineIdx === -1 ? block : block.slice(0, newlineIdx)).trim());
+    const rest = newlineIdx === -1 ? '' : block.slice(newlineIdx + 1);
+    const fields = rest
+      .split(/^\s*[-*]\s+/m)
+      .slice(1)
+      .map((b) => parseLabeledText(b.replace(/\n+/g, ' ').trim()))
+      .filter((x): x is CandidateProblemField => !!x && !!x.text);
+    if (rootCause) problemItems.push({ rootCause, fields });
+  }
+  if (problemItems.length === 0) return null;
+
+  // 准备清单：优先解析编号列表；老报告没有编号时按非空行兜底
+  let checklistItems = (checklistSec?.body || '')
+    .split('\n')
+    .filter((l) => /^\s*\d+\s*[.、．]/.test(l))
+    .map((l) => stripNumberMarker(l).trim())
+    .filter(Boolean);
+  if (checklistItems.length === 0 && checklistSec) {
+    checklistItems = checklistSec.body
+      .split('\n')
+      .map((l) => stripBulletMarker(l).trim())
+      .filter(Boolean);
+  }
+
+  return {
+    conclusion: { id: conclusionSec.id, title: conclusionSec.title, items: conclusionItems },
+    strengths: strengthsSec
+      ? { id: strengthsSec.id, title: strengthsSec.title, items: strengthItems }
+      : null,
+    problems: { id: problemsSec.id, title: problemsSec.title, items: problemItems },
+    checklist: checklistSec
+      ? { id: checklistSec.id, title: checklistSec.title, items: checklistItems }
+      : null,
+  };
+};
+
+// Section header shared by the structured candidate blocks: one restrained style everywhere
+const CandidateSectionHeader: React.FC<{ icon: React.ElementType; title: string }> = ({ icon: Icon, title }) => (
+  <div className="flex items-center gap-2 pb-3 mb-5 border-b border-slate-100">
+    <Icon className="w-4 h-4 text-brand-600 flex-shrink-0" />
+    <h3 className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
+  </div>
+);
+
+// Structured candidate report body: conclusion, strengths, problem cards, checklist.
+// Visual language is deliberately restrained: white cards, slate text, brand color only
+// for labels/numbers, and a single highlight treatment (brand-50 box) for demo answers.
+const CandidateReportBody: React.FC<{ data: CandidateReportData }> = ({ data }) => (
+  <div className="space-y-4">
+    {/* 本场表现结论 */}
+    <section
+      id={data.conclusion.id}
+      className="scroll-mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6 md:p-8"
+    >
+      <CandidateSectionHeader icon={Sparkles} title={data.conclusion.title} />
+      {data.conclusion.items.some((item) => item.label) ? (
+        <div className="space-y-3">
+          {data.conclusion.items.map((item, i) => (
+            <div key={i} className="flex flex-col sm:flex-row sm:gap-4">
+              {item.label && (
+                <span className="flex-shrink-0 sm:w-24 text-sm font-bold text-brand-600 pt-px">
+                  {item.label}
+                </span>
+              )}
+              <p className="text-sm md:text-base text-slate-700 leading-relaxed">{item.text}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ul className="list-disc pl-5 space-y-2 marker:text-brand-500">
+          {data.conclusion.items.map((item, i) => (
+            <li key={i} className="pl-1 text-sm md:text-base text-slate-700 leading-relaxed">
+              {item.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    {/* 值得保留的做法 */}
+    {data.strengths && data.strengths.items.length > 0 && (
+      <section
+        id={data.strengths.id}
+        className="scroll-mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6 md:p-8"
+      >
+        <CandidateSectionHeader icon={CheckCircle2} title={data.strengths.title} />
+        <div className="space-y-3">
+          {data.strengths.items.map((s, i) => (
+            <div key={i} className="flex gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0 mt-1" />
+              <p className="text-sm md:text-base text-slate-600 leading-relaxed">
+                {s.title && <strong className="font-bold text-slate-900">{s.title}：</strong>}
+                {s.evidence}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {/* 最需要改进的核心问题：每个问题一张卡片 */}
+    <section id={data.problems.id} className="scroll-mt-6">
+      <CandidateSectionHeader icon={AlertTriangle} title={data.problems.title} />
+      <div className="space-y-4">
+        {data.problems.items.map((p, idx) => (
+          <div
+            key={idx}
+            className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 md:p-8 break-inside-avoid"
+          >
+            <h4 className="text-base font-bold text-slate-900 leading-snug mb-5">
+              <span className="text-brand-600 mr-2">{String(idx + 1).padStart(2, '0')}</span>
+              {p.rootCause}
+            </h4>
+            <div className="space-y-3">
+              {p.fields.map((f, fi) => {
+                if (f.label.includes('示范')) {
+                  // 示范回答：全报告唯一的高亮块
+                  return (
+                    <div key={fi} className="rounded-lg bg-brand-50 px-4 py-3">
+                      <div className="flex items-center gap-1.5 text-sm font-bold text-brand-700 mb-1">
+                        <Quote className="w-3.5 h-3.5" />
+                        {f.label}
+                      </div>
+                      <p className="text-sm md:text-base text-slate-700 leading-relaxed">{f.text}</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={fi} className="flex flex-col sm:flex-row sm:gap-4">
+                    <span className="flex-shrink-0 sm:w-24 text-sm font-semibold text-slate-500 pt-px">
+                      {f.label}
+                    </span>
+                    <p className="text-sm md:text-base text-slate-700 leading-relaxed">{f.text}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    {/* 下一次面试准备清单 */}
+    {data.checklist && data.checklist.items.length > 0 && (
+      <section
+        id={data.checklist.id}
+        className="scroll-mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6 md:p-8"
+      >
+        <CandidateSectionHeader icon={ListChecks} title={data.checklist.title} />
+        <ol className="space-y-3">
+          {data.checklist.items.map((item, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 text-sm font-bold text-brand-600 pt-px">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <p className="text-sm md:text-base text-slate-600 leading-relaxed">{item}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+    )}
+  </div>
+);
 
 // Shared custom markdown renderers (kept from the previous design language)
 const markdownComponents = {
@@ -220,6 +471,10 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
   const dimensions = useMemo(
     () => isCandidate ? [] : parseDimensions(analysis?.result || ''),
     [analysis?.result, isCandidate]
+  );
+  const candidateData = useMemo(
+    () => (isCandidate ? parseCandidateReport(sections) : null),
+    [sections, isCandidate]
   );
 
   // Track the currently visible section for TOC highlighting
@@ -594,7 +849,10 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
           )}
 
           {/* Report body */}
-          {sections.length > 0 ? (
+          {candidateData ? (
+            // Candidate mode: structured coaching layout parsed from the report sections
+            <CandidateReportBody data={candidateData} />
+          ) : sections.length > 0 ? (
             <div className="space-y-4">
               {/* Expand / collapse controls (excluded from PDF) */}
               <div className="flex justify-end gap-2" data-html2canvas-ignore="true">

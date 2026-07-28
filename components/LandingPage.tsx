@@ -209,29 +209,29 @@ const LandingPage: React.FC = () => {
               <div className="mt-8 grid sm:grid-cols-2 gap-3 max-w-xl">
                 <button
                   onClick={() => scrollToMode('candidate-intro')}
-                  className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left text-slate-900 bg-white border border-white hover:border-violet-300 transition-colors"
+                  className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left bg-white/5 border border-white/10 hover:border-indigo-400/60 hover:bg-white/10 transition-colors"
                 >
-                  <span className="w-10 h-10 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
-                    <UserRound className="w-5 h-5 text-violet-600" />
+                  <span className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-500/20">
+                    <UserRound className="w-5 h-5" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-base font-semibold">提升自己</span>
-                    <span className="block text-xs text-slate-500 mt-0.5">复盘我的面试表现与成长方向</span>
+                    <span className="block text-base font-semibold text-white">提升自己</span>
+                    <span className="block text-xs text-slate-400 mt-0.5">复盘我的面试表现与成长方向</span>
                   </span>
-                  <ArrowRight className="w-4 h-4 ml-auto text-slate-400 group-hover:text-violet-500" />
+                  <ArrowRight className="w-4 h-4 ml-auto text-slate-500 group-hover:text-indigo-300 transition-colors" />
                 </button>
                 <button
                   onClick={() => scrollToMode('recruiter-intro')}
-                  className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left text-white bg-indigo-600 border border-indigo-500 hover:bg-indigo-500 transition-colors"
+                  className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left bg-white/5 border border-white/10 hover:border-indigo-400/60 hover:bg-white/10 transition-colors"
                 >
-                  <span className="w-10 h-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
-                    <ClipboardCheck className="w-5 h-5 text-indigo-600" />
+                  <span className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-500/20">
+                    <ClipboardCheck className="w-5 h-5" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-base font-semibold">判断他人</span>
-                    <span className="block text-xs text-indigo-100 mt-0.5">评估候选人与目标岗位的匹配度</span>
+                    <span className="block text-base font-semibold text-white">判断他人</span>
+                    <span className="block text-xs text-slate-400 mt-0.5">评估候选人与目标岗位的匹配度</span>
                   </span>
-                  <ArrowRight className="w-4 h-4 ml-auto text-indigo-200 group-hover:text-white" />
+                  <ArrowRight className="w-4 h-4 ml-auto text-slate-500 group-hover:text-indigo-300 transition-colors" />
                 </button>
               </div>
               <p className="mt-4 text-xs text-slate-500">先了解对应流程，再进入登录与分析。</p>
@@ -313,7 +313,7 @@ const LandingPage: React.FC = () => {
             <div className="max-w-3xl">
               <div className="text-xs font-semibold text-violet-600 tracking-widest">求职者模式 · 提升自己</div>
               <h3 className="mt-3 text-3xl font-extrabold tracking-tight">面试结束了，但成长才刚开始</h3>
-              <p className="mt-4 text-slate-600 leading-relaxed">
+              <p className="mt-4 text-slate-600 leading-relaxed lg:whitespace-nowrap">
                 上传目标岗位、简历与面试记录，集中找出 3–5 个最影响表现的核心问题，获得可以直接练习的回答结构与行动建议。
               </p>
             </div>
@@ -341,7 +341,7 @@ const LandingPage: React.FC = () => {
               开始复盘我的面试 <ArrowRight className="w-4 h-4" />
             </button>
             <p className="mt-4 max-w-3xl text-xs text-slate-500 leading-relaxed">
-              文件先在浏览器解析；提交分析后，面试文本及可用的简历文本会发送给当前配置的 AI 服务。上传简历时，源文件与解析文本会保存在受保护的服务器目录，仅本人和管理员可访问。
+              文件先在浏览器解析；提交分析后，面试文本及可用的简历文本会发送给当前配置的 AI 服务。上传简历时，源文件与解析文本会保存在受保护的服务器目录，仅本人可访问。
             </p>
           </Reveal>
         </div>
