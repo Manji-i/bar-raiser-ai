@@ -6,7 +6,7 @@ import type { AnalysisMode } from '../types';
 import { modePath, setPostLoginMode } from '../services/analysisMode';
 import {
   BrainCircuit, LogIn, ArrowRight, UploadCloud, ScanSearch, FileBarChart,
-  Crosshair, Sparkles, History, MessageSquareQuote,
+  ClipboardCheck, Crosshair, Sparkles, History, MessageSquareQuote, UserRound,
 } from 'lucide-react';
 
 // Scroll-triggered reveal wrapper (IntersectionObserver, no external animation lib)
@@ -93,11 +93,6 @@ const MOCK_DIMENSIONS = [
   { label: '沟通协作', value: 76 },
   { label: '结果导向', value: 82 },
 ];
-
-const MODE_ICON_URLS = {
-  candidate: 'https://cdn-tos-cn.bytedance.net/obj/archi/ee/es-design-base/svgs/icon_pa-job-level_outlined.d248899f.svg',
-  recruiter: 'https://cdn-tos-cn.bytedance.net/obj/archi/ee/es-design-base/svgs/icon_pa-personnel-hcplan_outlined.f1b0608f.svg',
-};
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -217,7 +212,7 @@ const LandingPage: React.FC = () => {
                   className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left text-slate-900 bg-white border border-white hover:border-violet-300 transition-colors"
                 >
                   <span className="w-10 h-10 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
-                    <img src={MODE_ICON_URLS.candidate} alt="" className="w-5 h-5" />
+                    <UserRound className="w-5 h-5 text-violet-600" />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-base font-semibold">提升自己</span>
@@ -230,7 +225,7 @@ const LandingPage: React.FC = () => {
                   className="group flex items-center gap-3 px-5 py-4 rounded-xl text-left text-white bg-indigo-600 border border-indigo-500 hover:bg-indigo-500 transition-colors"
                 >
                   <span className="w-10 h-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
-                    <img src={MODE_ICON_URLS.recruiter} alt="" className="w-5 h-5" />
+                    <ClipboardCheck className="w-5 h-5 text-indigo-600" />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-base font-semibold">判断他人</span>

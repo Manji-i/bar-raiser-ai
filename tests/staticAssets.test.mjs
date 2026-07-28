@@ -20,6 +20,10 @@ const landingPage = readFileSync(
   new URL('../components/LandingPage.tsx', import.meta.url),
   'utf8',
 );
+const candidateUpload = readFileSync(
+  new URL('../components/CandidateFileUpload.tsx', import.meta.url),
+  'utf8',
+);
 
 test('页面入口不引用不存在的 index.css', () => {
   assert.doesNotMatch(indexHtml, /href=["']\/index\.css["']/);
@@ -56,4 +60,19 @@ test('已登录首页入口使用锁定角色，不硬编码招聘方角色', ()
   assert.match(landingPage, /const \{ user, analysisMode \} = useAuth\(\)/);
   assert.match(landingPage, /setPostLoginMode\(mode\)/);
   assert.doesNotMatch(landingPage, /modePath\('recruiter', 'app'\)/);
+});
+
+test('产品图标不依赖外部 TOS SVG', () => {
+  assert.doesNotMatch(landingPage, /cdn-tos-cn\.bytedance\.net/);
+  assert.doesNotMatch(candidateUpload, /cdn-tos-cn\.bytedance\.net/);
+  assert.doesNotMatch(candidateUpload, /UPLOAD_ICON_URL/);
+});
+
+test('Candidate 岗位与 JD 输入区域保持等高', () => {
+  const fieldSource = (testId) => candidateUpload.match(
+    new RegExp(`<textarea\\s+[\\s\\S]*?data-testid="${testId}"[\\s\\S]*?\\/>`),
+  )?.[0] ?? '';
+
+  assert.match(fieldSource('candidate-job-title'), /className="[^"]*h-28[^"]*resize-none/);
+  assert.match(fieldSource('candidate-job-description'), /className="[^"]*h-28[^"]*resize-none/);
 });

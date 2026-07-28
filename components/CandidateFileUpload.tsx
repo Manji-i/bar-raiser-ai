@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   AlertCircle, ArrowLeft, ArrowRight, Check, ClipboardPaste, FileText,
-  Loader2, Sparkles, Trash2,
+  Loader2, Sparkles, Trash2, UploadCloud,
 } from 'lucide-react';
 
 import type { CandidateAnalysisInput, ResumeParseStatus } from '../types';
@@ -24,7 +24,6 @@ const STEPS = [
   { id: 3, label: '确认并分析' },
 ];
 
-const UPLOAD_ICON_URL = 'https://cdn-tos-cn.bytedance.net/obj/archi/ee/es-design-base/svgs/icon_file-uploadfolder-v2_outlined.64de30a2.svg';
 const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 const RESUME_MIME_TYPES = new Set([
   'application/pdf',
@@ -219,20 +218,24 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
             <div className="grid md:grid-cols-2 gap-5">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">目标职位名称 <span className="text-red-500">*</span></label>
-                <input
+                <textarea
+                  data-testid="candidate-job-title"
+                  rows={4}
                   value={jobTitle}
                   onChange={(event) => setJobTitle(event.target.value)}
                   placeholder="例如：高级产品经理"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                  className="w-full h-28 resize-none px-4 py-3 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">JD（选填）</label>
                 <textarea
+                  data-testid="candidate-job-description"
+                  rows={4}
                   value={jobDescription}
                   onChange={(event) => setJobDescription(event.target.value)}
                   placeholder="粘贴目标岗位的职位描述"
-                  className="w-full min-h-[112px] px-4 py-3 border border-slate-300 rounded-lg outline-none resize-y focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                  className="w-full h-28 resize-none px-4 py-3 border border-slate-300 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 />
               </div>
             </div>
@@ -249,7 +252,7 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
                   onDrop={(event) => handleDrop('resume', event)}
                   className={`border border-dashed rounded-xl p-6 text-center transition-colors ${dragTarget === 'resume' ? 'border-violet-500 bg-violet-50' : 'border-slate-300 bg-slate-50'}`}
                 >
-                  <img src={UPLOAD_ICON_URL} alt="" className="w-7 h-7 mx-auto opacity-70" />
+                  <UploadCloud className="w-7 h-7 mx-auto text-violet-500" />
                   <p className="mt-3 text-sm text-slate-600">拖入简历，或选择本地文件</p>
                   <label className="mt-3 inline-flex cursor-pointer px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-700 hover:bg-slate-50">
                     选择简历
@@ -325,7 +328,7 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
                     </div>
                   ) : (
                     <>
-                      <img src={UPLOAD_ICON_URL} alt="" className="w-8 h-8 mx-auto opacity-70" />
+                      <UploadCloud className="w-8 h-8 mx-auto text-indigo-500" />
                       <p className="mt-3 text-sm text-slate-600">上传面试记录文件</p>
                       <label className="mt-3 inline-flex cursor-pointer px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-700 hover:bg-slate-50">
                         选择文件
