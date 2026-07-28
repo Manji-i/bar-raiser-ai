@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { reportService } from './services/reportService.js';
 import { promptService } from './services/promptService.js';
 import { userService } from './services/userService.js';
+import { applyCandidateConclusionContract } from './services/candidatePrompt.js';
 import {
   buildCandidateInput,
   buildRecruiterInput,
@@ -205,7 +206,10 @@ app.post('/api/analyze', authenticate, uploadResume, async (req, res) => {
     const inputContent = analysisMode === 'candidate'
       ? buildCandidateInput(inputData)
       : buildRecruiterInput(inputData);
-    const systemPrompt = promptService.getCurrentPrompt(analysisMode).content;
+    const storedPrompt = promptService.getCurrentPrompt(analysisMode).content;
+    const systemPrompt = analysisMode === 'candidate'
+      ? applyCandidateConclusionContract(storedPrompt)
+      : storedPrompt;
     const resultText = await runAiAnalysis(systemPrompt, inputContent);
 
     if (!resultText) {
