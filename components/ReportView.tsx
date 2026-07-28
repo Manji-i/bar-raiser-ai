@@ -5,8 +5,8 @@ import {
   ChevronDown, ChevronsUpDown, ChevronsDownUp, Calendar, FileText,
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AnalysisState, Report } from '../types';
-import { getRecentMode, modePath } from '../services/analysisMode';
+import { AnalysisMode, AnalysisState, Report } from '../types';
+import { modePath, reportMatchesAuthMode } from '../services/analysisMode';
 
 // 辅助函数：获取带认证的请求头
 const getAuthHeaders = () => {
@@ -24,9 +24,12 @@ const getAuthHeaders = () => {
 declare var html2pdf: any;
 
 interface ReportViewProps {
+  authMode: AnalysisMode;
   analysis?: AnalysisState;
   onReset?: () => void;
 }
+
+const MODE_MISMATCH_NOTICE = '该报告不属于当前登录角色，请退出后重新选择角色。';
 
 interface ReportSection {
   id: string;
@@ -125,15 +128,19 @@ const markdownComponents = {
   ),
 };
 
-const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onReset }) => {
+const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnalysis, onReset }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const contentRef = useRef<HTMLDivElement>(null);
+  const initialAnalysisMatches = !initialAnalysis
+    || reportMatchesAuthMode(initialAnalysis.analysisMode, authMode);
 
-  const [analysis, setAnalysis] = useState<AnalysisState | null>(initialAnalysis || null);
+  const [analysis, setAnalysis] = useState<AnalysisState | null>(
+    initialAnalysisMatches ? initialAnalysis ?? null : null,
+  );
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [isLoading, setIsLoading] = useState(!initialAnalysis);
+  const [isLoading, setIsLoading] = useState(!initialAnalysis || !initialAnalysisMatches);
   const [copyingLink, setCopyingLink] = useState(false);
   const [feedback, setFeedback] = useState({
     rating: 0,
@@ -148,6 +155,15 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
   const [activeSection, setActiveSection] = useState<string | null>(null);
 
   useEffect(() => {
+    if (initialAnalysis && !reportMatchesAuthMode(initialAnalysis.analysisMode, authMode)) {
+      navigate(modePath(authMode, 'history'), {
+        replace: true,
+        state: { notice: MODE_MISMATCH_NOTICE },
+      });
+    }
+  }, [authMode, initialAnalysis, navigate]);
+
+  useEffect(() => {
     // If accessing via URL ID and no initial analysis provided, fetch it
     if (id && !initialAnalysis) {
       const fetchReport = async () => {
@@ -155,6 +171,13 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
           const res = await fetch(`/api/reports/${id}`, { headers: getAuthHeaders() });
           if (res.ok) {
             const report: Report = await res.json();
+            if (!reportMatchesAuthMode(report.analysisMode, authMode)) {
+              navigate(modePath(authMode, 'history'), {
+                replace: true,
+                state: { notice: MODE_MISMATCH_NOTICE },
+              });
+              return;
+            }
             setAnalysis({
               status: 'COMPLETE' as any,
               result: report.result,
@@ -189,9 +212,9 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       };
       fetchReport();
     }
-  }, [id, initialAnalysis]);
+  }, [authMode, id, initialAnalysis, navigate]);
 
-  const reportMode = analysis?.analysisMode ?? 'recruiter';
+  const reportMode = analysis?.analysisMode ?? authMode;
   const isCandidate = reportMode === 'candidate';
   const sections = useMemo(() => splitSections(analysis?.result || ''), [analysis?.result]);
   const dimensions = useMemo(
@@ -321,7 +344,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       });
       if (res.ok) {
         if (onReset) onReset();
-        else navigate(modePath(reportMode, 'app'));
+        else navigate(modePath(authMode, 'app'));
       }
     } catch (e) {
       console.error("Failed to delete", e);
@@ -386,7 +409,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
       <div className="max-w-xl mx-auto mt-20 text-center">
         <h3 className="text-xl font-bold text-slate-900">报告未找到</h3>
         <p className="text-slate-500 mt-2 mb-6">{analysis?.error || "该报告不存在或已被删除。"}</p>
-        <button onClick={() => navigate(modePath(getRecentMode(), 'app'))} className="text-brand-600 font-medium hover:underline">
+        <button onClick={() => navigate(modePath(authMode, 'app'))} className="text-brand-600 font-medium hover:underline">
           返回新建分析
         </button>
       </div>
@@ -458,7 +481,7 @@ const ReportView: React.FC<ReportViewProps> = ({ analysis: initialAnalysis, onRe
           {/* Action toolbar (excluded from PDF) */}
           <div className="flex flex-wrap items-center gap-3 mb-6" data-html2canvas-ignore="true">
             <button
-              onClick={onReset ? onReset : () => navigate(modePath(reportMode, 'app'))}
+              onClick={onReset ? onReset : () => navigate(modePath(authMode, 'app'))}
               className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
             >
               <RefreshCw className="w-4 h-4" />

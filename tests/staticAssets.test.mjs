@@ -15,6 +15,11 @@ const loginPage = readFileSync(
   new URL('../src/components/LoginPage.tsx', import.meta.url),
   'utf8',
 );
+const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
+const landingPage = readFileSync(
+  new URL('../components/LandingPage.tsx', import.meta.url),
+  'utf8',
+);
 
 test('页面入口不引用不存在的 index.css', () => {
   assert.doesNotMatch(indexHtml, /href=["']\/index\.css["']/);
@@ -40,4 +45,15 @@ test('登录页提供两个角色选项且主按钮只显示登录或注册', ()
   assert.match(loginPage, /await login\(username, password, selectedMode\)/);
   assert.match(loginPage, /await register\(username, password, selectedMode,/);
   assert.doesNotMatch(loginPage, /以.+身份(?:登录|注册)/);
+});
+
+test('顶部导航不提供角色切换入口', () => {
+  assert.doesNotMatch(app, /const switchMode/);
+  assert.doesNotMatch(app, /aria-label="分析模式"/);
+});
+
+test('已登录首页入口使用锁定角色，不硬编码招聘方角色', () => {
+  assert.match(landingPage, /const \{ user, analysisMode \} = useAuth\(\)/);
+  assert.match(landingPage, /setPostLoginMode\(mode\)/);
+  assert.doesNotMatch(landingPage, /modePath\('recruiter', 'app'\)/);
 });

@@ -15,6 +15,17 @@ export const resolveStoredMode = (value: string | null): AnalysisMode =>
 export const modePath = (mode: AnalysisMode, area: ModeArea): string =>
   `/${area}/${mode}`;
 
+export const resolveModeAccess = (
+  routeMode: AnalysisMode | null,
+  authMode: AnalysisMode,
+  area: ModeArea,
+): string => modePath(routeMode === authMode ? routeMode : authMode, area);
+
+export const reportMatchesAuthMode = (
+  reportMode: AnalysisMode | undefined,
+  authMode: AnalysisMode,
+): boolean => (reportMode ?? 'recruiter') === authMode;
+
 export const modeFromPath = (pathname: string): AnalysisMode | null => {
   const segment = pathname.split('/').filter(Boolean)[1];
   return isAnalysisMode(segment) ? segment : null;

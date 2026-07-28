@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../src/context/AuthContext';
 import SampleReportSection from './SampleReportSection';
 import type { AnalysisMode } from '../types';
-import { modePath, rememberMode, setPostLoginPath } from '../services/analysisMode';
+import { modePath, setPostLoginMode } from '../services/analysisMode';
 import {
   BrainCircuit, LogIn, ArrowRight, UploadCloud, ScanSearch, FileBarChart,
   Crosshair, Sparkles, History, MessageSquareQuote,
@@ -101,15 +101,27 @@ const MODE_ICON_URLS = {
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, analysisMode } = useAuth();
+  const [roleNotice, setRoleNotice] = useState('');
 
   const enterMode = (mode: AnalysisMode) => {
-    rememberMode(mode);
     if (!user) {
-      setPostLoginPath(mode);
+      setPostLoginMode(mode);
       navigate('/login');
       return;
     }
+
+    if (!analysisMode) {
+      navigate('/login');
+      return;
+    }
+
+    if (mode !== analysisMode) {
+      const roleLabel = analysisMode === 'candidate' ? '提升自己' : '判断他人';
+      setRoleNotice(`当前登录角色为「${roleLabel}」，退出登录后可重新选择角色。`);
+      return;
+    }
+
     navigate(modePath(mode, 'app'));
   };
 
@@ -133,9 +145,9 @@ const LandingPage: React.FC = () => {
               </span>
             </h1>
           </div>
-          {user ? (
+          {user && analysisMode ? (
             <button
-              onClick={() => navigate(modePath('recruiter', 'app'))}
+              onClick={() => navigate(modePath(analysisMode, 'app'))}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 transition-all shadow-lg shadow-indigo-500/20"
             >
               进入应用
@@ -152,6 +164,21 @@ const LandingPage: React.FC = () => {
           )}
         </div>
       </header>
+
+      {roleNotice && (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4" role="status">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+            <span>{roleNotice}</span>
+            <button
+              type="button"
+              onClick={() => setRoleNotice('')}
+              className="flex-shrink-0 text-amber-200 hover:text-white transition-colors"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Hero 区 */}
       <section className="relative overflow-hidden">

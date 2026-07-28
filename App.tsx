@@ -11,12 +11,10 @@ import LoginPage from './src/components/LoginPage';
 import LandingPage from './components/LandingPage';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import {
-  consumePostLoginPath,
-  getRecentMode,
   isAnalysisMode,
-  modeFromPath,
   modePath,
-  rememberMode,
+  reportMatchesAuthMode,
+  resolveModeAccess,
 } from './services/analysisMode';
 import {
   BrainCircuit, History, PlusCircle, Settings, LogOut, User, Menu, X,
@@ -25,7 +23,7 @@ import {
 
 // 受保护的路由组件
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, analysisMode, loading } = useAuth();
 
   if (loading) {
     return (
@@ -35,7 +33,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
 
-  if (!user) {
+  if (!user || !analysisMode) {
     return <Navigate to="/" replace />;
   }
 
@@ -44,7 +42,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // 登录页面路由组件
 const LoginRoute: React.FC = () => {
-  const { user, loading } = useAuth();
+  const { user, analysisMode, loading } = useAuth();
 
   if (loading) {
     return (
@@ -54,8 +52,8 @@ const LoginRoute: React.FC = () => {
     );
   }
 
-  if (user) {
-    return <Navigate to={consumePostLoginPath() ?? modePath(getRecentMode(), 'app')} replace />;
+  if (user && analysisMode) {
+    return <Navigate to={modePath(analysisMode, 'app')} replace />;
   }
 
   return <LoginPage />;
@@ -63,7 +61,7 @@ const LoginRoute: React.FC = () => {
 
 // 仅管理员的路由组件
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, analysisMode, loading } = useAuth();
 
   if (loading) {
     return (
@@ -74,28 +72,34 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   if (!user || !user.isAdmin) {
-    return <Navigate to={modePath(getRecentMode(), 'app')} replace />;
+    return <Navigate to={analysisMode ? modePath(analysisMode, 'app') : '/'} replace />;
   }
 
   return <>{children}</>;
 };
 
-const LegacyModeRedirect: React.FC<{ area: 'app' | 'history' }> = ({ area }) => (
-  <Navigate to={modePath(getRecentMode(), area)} replace />
-);
+const LegacyModeRedirect: React.FC<{ area: 'app' | 'history' }> = ({ area }) => {
+  const { analysisMode } = useAuth();
+  return analysisMode
+    ? <Navigate to={modePath(analysisMode, area)} replace />
+    : <Navigate to="/" replace />;
+};
 
 const ModeParamRoute: React.FC<{
+  area: 'app' | 'history';
   children: (mode: AnalysisMode) => React.ReactNode;
-}> = ({ children }) => {
+}> = ({ area, children }) => {
   const { mode } = useParams();
+  const { analysisMode } = useAuth();
   const validMode = isAnalysisMode(mode) ? mode : null;
 
-  useEffect(() => {
-    if (validMode) rememberMode(validMode);
-  }, [validMode]);
+  if (!analysisMode) {
+    return <Navigate to="/" replace />;
+  }
 
-  if (!validMode) {
-    return <Navigate to={modePath('recruiter', 'app')} replace />;
+  const destination = resolveModeAccess(validMode, analysisMode, area);
+  if (!validMode || destination !== modePath(validMode, area)) {
+    return <Navigate to={destination} replace />;
   }
 
   return <>{children(validMode)}</>;
@@ -116,9 +120,11 @@ const NAV_ITEMS: NavItem[] = [
 const TopNav: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, analysisMode, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const currentMode = modeFromPath(location.pathname) ?? getRecentMode();
+  const currentMode = analysisMode;
+
+  if (!currentMode) return null;
 
   const handleLogout = async () => {
     try {
@@ -144,11 +150,6 @@ const TopNav: React.FC = () => {
     setMobileOpen(false);
   };
 
-  const switchMode = (mode: AnalysisMode) => {
-    rememberMode(mode);
-    go(modePath(mode, 'app'));
-  };
-
   return (
     <header className="sticky top-0 z-30 bg-slate-900 text-slate-300 shadow-lg shadow-slate-900/10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
@@ -164,22 +165,6 @@ const TopNav: React.FC = () => {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
-          <div className="flex items-center p-1 mr-2 rounded-full bg-white/5 border border-white/10" aria-label="分析模式">
-            {([
-              ['candidate', '提升自己'],
-              ['recruiter', '判断他人'],
-            ] as const).map(([mode, label]) => (
-              <button
-                key={mode}
-                onClick={() => switchMode(mode)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  currentMode === mode ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
           {items.map((item) => {
             const active = isActive(item.path);
             const Icon = item.icon;
@@ -240,22 +225,6 @@ const TopNav: React.FC = () => {
       {/* Mobile dropdown */}
       {mobileOpen && (
         <div className="md:hidden border-t border-slate-800 px-4 py-3 space-y-1">
-          <div className="grid grid-cols-2 gap-2 pb-3 mb-2 border-b border-slate-800">
-            {([
-              ['candidate', '提升自己'],
-              ['recruiter', '判断他人'],
-            ] as const).map(([mode, label]) => (
-              <button
-                key={mode}
-                onClick={() => switchMode(mode)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  currentMode === mode ? 'bg-white text-slate-900' : 'bg-white/5 text-slate-400'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
           {items.map((item) => {
             const active = isActive(item.path);
             const Icon = item.icon;
@@ -397,8 +366,7 @@ const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 // 主应用内容
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const routeMode = modeFromPath(location.pathname);
+  const { user, analysisMode } = useAuth();
   const [analysisState, setAnalysisState] = useState<AnalysisState>({
     status: AnalysisStatus.IDLE,
     result: null,
@@ -407,17 +375,28 @@ const AppContent: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!routeMode) return;
+    if (!user || !analysisMode) return;
     setAnalysisState({
       status: AnalysisStatus.IDLE,
       result: null,
       error: null,
       fileName: null,
-      analysisMode: routeMode,
+      analysisMode,
     });
-  }, [routeMode]);
+  }, [user?.id, analysisMode]);
 
   const runAnalysis = async (input: AnalysisInput) => {
+    if (!analysisMode || !reportMatchesAuthMode(input.analysisMode, analysisMode)) {
+      setAnalysisState({
+        status: AnalysisStatus.ERROR,
+        result: null,
+        error: '当前分析角色与登录角色不一致，请退出后重新选择角色。',
+        fileName: input.fileName,
+        analysisMode: analysisMode ?? undefined,
+      });
+      return;
+    }
+
     setAnalysisState((prev) => ({
       ...prev,
       status: AnalysisStatus.ANALYZING,
@@ -466,14 +445,15 @@ const AppContent: React.FC = () => {
   };
 
   const handleReset = () => {
+    if (!analysisMode) return;
     setAnalysisState({
       status: AnalysisStatus.IDLE,
       result: null,
       error: null,
       fileName: null,
-      analysisMode: routeMode ?? getRecentMode(),
+      analysisMode,
     });
-    navigate(modePath(routeMode ?? getRecentMode(), 'app'));
+    navigate(modePath(analysisMode, 'app'));
   };
 
   return (
@@ -485,10 +465,14 @@ const AppContent: React.FC = () => {
       <Route path="/login" element={<LoginRoute />} />
 
       {/* 受保护的路由 */}
-      <Route path="/app" element={<LegacyModeRedirect area="app" />} />
+      <Route path="/app" element={
+        <ProtectedRoute>
+          <LegacyModeRedirect area="app" />
+        </ProtectedRoute>
+      } />
       <Route path="/app/:mode" element={
         <ProtectedRoute>
-          <ModeParamRoute>{(mode) => (
+          <ModeParamRoute area="app">{(mode) => (
           <AppShell>
             {analysisState.status === AnalysisStatus.IDLE && (
               <div className="space-y-8">
@@ -521,6 +505,7 @@ const AppContent: React.FC = () => {
             {analysisState.status === AnalysisStatus.COMPLETE && (
               <ReportView
                 analysis={analysisState}
+                authMode={mode}
                 onReset={handleReset}
               />
             )}
@@ -547,10 +532,14 @@ const AppContent: React.FC = () => {
         </ProtectedRoute>
       } />
 
-      <Route path="/history" element={<LegacyModeRedirect area="history" />} />
+      <Route path="/history" element={
+        <ProtectedRoute>
+          <LegacyModeRedirect area="history" />
+        </ProtectedRoute>
+      } />
       <Route path="/history/:mode" element={
         <ProtectedRoute>
-          <ModeParamRoute>{(mode) => (
+          <ModeParamRoute area="history">{(mode) => (
             <AppShell>
               <HistoryView mode={mode} />
             </AppShell>
@@ -560,7 +549,7 @@ const AppContent: React.FC = () => {
       <Route path="/report/:id" element={
         <ProtectedRoute>
           <AppShell>
-            <ReportView />
+            {analysisMode && <ReportView authMode={analysisMode} />}
           </AppShell>
         </ProtectedRoute>
       } />

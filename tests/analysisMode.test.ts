@@ -11,7 +11,9 @@ import {
   isAnalysisMode,
   modeFromPath,
   modePath,
+  reportMatchesAuthMode,
   rememberMode,
+  resolveModeAccess,
   resolveStoredMode,
   setAuthMode,
   setPostLoginMode,
@@ -117,4 +119,13 @@ test('post-login intent stores a mode rather than a trusted destination', () => 
     if (previousWindow === undefined) delete (globalThis as any).window;
     else (globalThis as any).window = previousWindow;
   }
+});
+
+test('locked mode owns all business route decisions', () => {
+  assert.equal(resolveModeAccess('candidate', 'candidate', 'app'), '/app/candidate');
+  assert.equal(resolveModeAccess('recruiter', 'candidate', 'app'), '/app/candidate');
+  assert.equal(resolveModeAccess(null, 'recruiter', 'history'), '/history/recruiter');
+  assert.equal(reportMatchesAuthMode('candidate', 'candidate'), true);
+  assert.equal(reportMatchesAuthMode('recruiter', 'candidate'), false);
+  assert.equal(reportMatchesAuthMode(undefined, 'recruiter'), true);
 });

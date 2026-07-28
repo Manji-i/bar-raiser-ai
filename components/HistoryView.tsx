@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Trash2, Calendar, FileText, Share2, PlusCircle, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { AnalysisMode, Report } from '../types';
 import { ScoreBadge, getScoreBadgeClass } from './ui';
-import { modePath } from '../services/analysisMode';
+import { modePath, reportMatchesAuthMode } from '../services/analysisMode';
 
 // 辅助函数：获取带认证的请求头
 const getAuthHeaders = () => {
@@ -29,9 +29,18 @@ const RATING_ORDER = ['MH', 'H+', 'H', 'H-', 'NH'];
 
 const HistoryView: React.FC<{ mode: AnalysisMode }> = ({ mode }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const incomingNotice = (location.state as { notice?: string } | null)?.notice ?? '';
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState(incomingNotice);
+
+  useEffect(() => {
+    if (incomingNotice) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [incomingNotice, location.pathname, navigate]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -42,8 +51,8 @@ const HistoryView: React.FC<{ mode: AnalysisMode }> = ({ mode }) => {
     try {
       const res = await fetch(`/api/reports?analysisMode=${mode}`, { headers: getAuthHeaders() });
       if (res.ok) {
-        const data = await res.json();
-        setReports(data);
+        const data: Report[] = await res.json();
+        setReports(data.filter((report) => reportMatchesAuthMode(report.analysisMode, mode)));
       }
     } catch (error) {
       console.error("Failed to fetch reports", error);
@@ -96,6 +105,18 @@ const HistoryView: React.FC<{ mode: AnalysisMode }> = ({ mode }) => {
 
   return (
     <div className="w-full max-w-4xl mx-auto">
+      {notice && (
+        <div className="mb-6 flex items-start justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">
+          <span>{notice}</span>
+          <button
+            type="button"
+            onClick={() => setNotice('')}
+            className="flex-shrink-0 font-medium text-amber-700 hover:text-amber-900"
+          >
+            关闭
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{mode === 'candidate' ? '个人复盘历史' : '评估历史记录'}</h1>
