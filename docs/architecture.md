@@ -7,7 +7,9 @@ Eval Bar AI 在同一套认证、AI Provider 和报告存储之上提供两种�
 - `candidate`（提升自己）：基于面试记录生成候选人复盘建议，不输出招聘评分。
 - `recruiter`（判断他人）：基于岗位胜任力和面试记录生成人岗匹配评估。
 
-模式只决定输入、Prompt、报告结构和展示方式，不绑定账号。一个账号可以随时切换模式。
+模式决定输入、Prompt、报告结构和展示方式。用户在登录或注册时选择本次会话角色，登录后不能通过产品界面切换；退出后重新登录才能改选角色。
+
+当前实现为“强化版 A”：`AuthContext` 中的客户端锁定角色是前端业务导航的单一来源，用于防止误操作、URL 串线和历史混排，但不是服务端授权边界。同一账号仍可能主动修改浏览器存储或直接构造 API 参数；服务端 token 绑定方案记录在[未来需迭代内容](未来需迭代内容.md)中。
 
 ## 2. 运行结构
 
@@ -33,16 +35,16 @@ flowchart LR
 | 路由 | 权限 | 行为 |
 |---|---|---|
 | `/` | 公开 | 双模式产品首页 |
-| `/login` | 公开 | 登录/注册；成功后恢复目标模式 |
-| `/app/candidate` | 登录 | 候选人三步复盘流程 |
-| `/app/recruiter` | 登录 | 招聘方分析流程 |
-| `/history/candidate` | 登录 | 仅显示 Candidate 报告 |
-| `/history/recruiter` | 登录 | 仅显示 Recruiter 报告 |
-| `/app`、`/history` | 登录 | 根据上次使用的模式跳转，缺省为 Recruiter |
-| `/report/:id` | 登录 | 根据报告自身 `analysisMode` 渲染 |
+| `/login` | 公开 | 选择“提升自己”或“判断他人”后登录/注册；成功后绑定本次会话角色 |
+| `/app/candidate` | Candidate 登录角色 | 候选人三步复盘流程；其他登录角色自动回到自身工作台 |
+| `/app/recruiter` | Recruiter 登录角色 | 招聘方分析流程；其他登录角色自动回到自身工作台 |
+| `/history/candidate` | Candidate 登录角色 | 仅请求并显示 Candidate 报告 |
+| `/history/recruiter` | Recruiter 登录角色 | 仅请求并显示 Recruiter 报告 |
+| `/app`、`/history` | 登录 | 根据 `AuthContext.analysisMode` 跳转，不再读取最近浏览模式 |
+| `/report/:id` | 登录 | 报告模式必须与登录角色一致；不一致时返回当前角色历史并提示 |
 | `/admin` | 管理员 | 报告、反馈与两套 Prompt 管理 |
 
-`services/analysisMode.ts` 负责模式校验、兼容路由、上次使用模式和登录后目标路径。非法模式不会进入业务组件。
+`src/context/AuthContext.tsx` 负责认证与角色的共同生命周期；只有 token、用户和合法角色同时存在时才恢复会话。`services/analysisMode.ts` 提供严格角色存储、登录前角色意图、路由决策和报告模式判断。非法或不匹配模式不会进入业务组件。
 
 ## 4. 分析数据流
 
@@ -54,7 +56,7 @@ flowchart LR
 4. 有简历源文件时前端发送 `multipart/form-data`；没有文件时发送 JSON。
 5. `server.js` 校验模式、必填字段、文件大小、MIME、扩展名和文件签名。
 6. `services/analysisRequest.js` 把用户材料序列化到 `<input_json>` 数据边界；低质量或空白简历正文不进入模型输入。
-7. `services/candidatePrompt.js` 要求模型按“真实追问 > JD > 岗位常见要求”筛选问题，并以面试记录优先于简历。
+7. `services/candidatePrompt.js` 要求模型按“真实追问 > JD > 岗位常见要求”筛选问题，并以面试记录优先于简历；版本化结论契约要求“本场表现结论”严格输出三个独立段落。
 8. AI 成功后，服务端保存源文件，并在同一 SQLite transaction 中创建报告和附件记录。
 9. Candidate 报告不解析 NH/H-/H/H+/MH，不展示胜任力评分。
 
@@ -135,6 +137,8 @@ Candidate Prompt 的稳定边界：
 - 示例回答只能重组材料中的真实信息，缺失事实使用占位符。
 - 仅来自简历的信息必须提示候选人确认。
 - 报告目标长度 1500–2200 个中文字符。
+- “本场表现结论”只包含一句话总结、本场重点、下次准备三个独立段落，每段一句。
+- 运行时通过 `candidate-conclusion-v2` 契约兼容数据库中的旧 Candidate Prompt，不需要 schema 或 Prompt 数据迁移。
 
 ## 9. 兼容与失败处理
 
@@ -144,6 +148,7 @@ Candidate Prompt 的稳定边界：
 - 文件已保存但事务失败时，服务端清理本次孤立文件。
 - 简历磁盘文件缺失不影响报告查看，下载接口返回 `404`。
 - 报告 Markdown 结构不完整时使用通用 Markdown 渲染。
+- 客户端角色锁不能替代服务端授权；需提升隔离等级时按[未来需迭代内容](未来需迭代内容.md)迁移到 token 绑定角色。
 
 ## 10. 验证入口
 

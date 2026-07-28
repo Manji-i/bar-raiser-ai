@@ -1,5 +1,24 @@
 # Eval Bar AI 当前交接状态
 
+## 2026-07-28 本地迭代（尚未发布）
+
+- 登录与注册页增加“提升自己 / 判断他人”角色选择，按钮文案仍为“登录 / 注册”。
+- 登录角色与认证状态共同存储；缺少合法角色时失败关闭，登录后顶部导航不再提供角色切换。
+- `/app`、`/history`、模式路由、首页入口和报告详情统一服从登录角色；历史列表只保留当前角色报告。
+- 首页和 Candidate 上传区的外部 SVG 已替换为 `lucide-react`，目标职位名称与 JD 输入区域改为等高。
+- Candidate“本场表现结论”通过 `candidate-conclusion-v2` 输出契约固定为三个独立段落：一句话总结、本场重点、下次准备。
+- 旧数据库 Candidate Prompt 在模型调用前动态追加一次新契约；本次没有数据库 schema 变更，也不需要 Prompt 数据迁移。
+- 强化版 A 的剩余安全风险与服务端 token 绑定升级条件见[未来需迭代内容](未来需迭代内容.md)。
+
+本次本地验证命令：
+
+```bash
+npm test
+npm run build
+```
+
+以上内容当前仅在 `codex/login-role-lock` 分支，不代表已经推送 GitHub 或部署生产。
+
 ## 当前能力
 
 项目已具备完整双模式入口和共享分析管线：
@@ -45,8 +64,8 @@
 - 生产构建会提示 Tailwind CDN 不适合生产使用。
 - 主前端 bundle 超过 Vite 默认 500 kB 提示线，尚未拆包。
 - `npm audit` 当前报告 17 个依赖漏洞；没有执行可能引入破坏性升级的 `npm audit fix`。
-- `index.html` 仍引用不存在的 `/index.css`，构建会保留该引用；页面依靠 Tailwind CDN 正常渲染，但应在后续独立清理。
 - 简历首版没有 OCR、病毒扫描或自动重解析。
+- 客户端角色锁不构成服务端授权边界；服务端 token 绑定、密码哈希、token 过期、登录限流和管理员初始化风险统一在[未来需迭代内容](未来需迭代内容.md)维护。
 
 ## 下一步建议
 
@@ -62,3 +81,4 @@
 - [运维手册](operator-runbook.md)
 - [部署指南](../DEPLOYMENT.md)
 - [候选人模式设计规格](superpowers/specs/2026-07-27-candidate-interview-coaching-design.md)
+- [未来需迭代内容](未来需迭代内容.md)
