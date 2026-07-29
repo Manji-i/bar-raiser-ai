@@ -1,5 +1,8 @@
-import React from 'react';
-import { FileBarChart, Crosshair, ScanSearch, ShieldAlert } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  FileBarChart, Crosshair, ScanSearch, ShieldAlert, Sparkles, ClipboardCheck,
+  UserRound, Users,
+} from 'lucide-react';
 
 // 脱敏示例报告内容：全部为虚构数据，仅用于展示报告结构与效果
 interface SampleSection {
@@ -16,7 +19,76 @@ interface SampleGroup {
   sections: SampleSection[];
 }
 
-const SAMPLE_GROUPS: SampleGroup[] = [
+const CANDIDATE_GROUPS: SampleGroup[] = [
+  {
+    icon: FileBarChart,
+    headline: '先给结论，不打分、不贴标签',
+    copy: '复盘报告开头用三句话讲清本场表现：整体状态、值得保留与需要改进的数量、下次最该准备什么。不预测录用结果，只关注你能控制的部分。',
+    sections: [
+      {
+        id: 'c0',
+        title: '本场表现结论',
+        bullets: [
+          { label: '一句话总结', text: '整场回答信息量大但主线不够聚焦，高价值案例没有讲出与岗位要求匹配的深度' },
+          { label: '本场重点', text: '值得保留的做法 2 项、核心改进问题 3 个；最优先改进的是"成果缺少量化结果"' },
+          { label: '下次准备', text: '把 2 个核心项目按 STAR 结构重写，并补齐可量化的结果数据' },
+        ],
+      },
+    ],
+  },
+  {
+    icon: Sparkles,
+    headline: '做对的地方，明确保留',
+    copy: '复盘不是只挑毛病。报告会指出本场值得保留的做法与对应证据，让偶然的好表现变成稳定的答题习惯。',
+    sections: [
+      {
+        id: 'c1',
+        title: '值得保留的做法',
+        bullets: [
+          { label: '主动确认问题边界', text: '回答"如何处理招聘需求变更"前先澄清业务背景，避免答非所问' },
+          { label: '用数据开场', text: '介绍交付成果时先报"年度 70+ 岗位、完成率 85%"，让面试官快速抓住体量' },
+        ],
+      },
+    ],
+  },
+  {
+    icon: ScanSearch,
+    headline: '每个核心问题，拆到根因',
+    copy: '只聚焦最影响表现的 3–5 个问题：面试官在验证什么、你的回答缺在哪、更好的结构是什么，并基于你的真实经历给出示范回答。',
+    sections: [
+      {
+        id: 'c2',
+        title: '最需要改进的核心问题',
+        subtitle: '1. 成果缺少量化结果',
+        bullets: [
+          { label: '代表性问题', text: '"讲讲你主导过的最复杂的招聘项目。"' },
+          { label: '面试官意图', text: '验证结果导向与项目的真实深度' },
+          { label: '原回答的问题', text: '过程描述充分，但未给出交付周期、完成率等结果数据' },
+          { label: '更好的结构', text: '结论先行 → 任务目标 → 2 个关键动作 → 量化结果' },
+          { label: '示范回答', text: '"上季度我牵头 40+ 岗位集中交付，通过重构渠道组合与周度漏斗复盘，完成率 92%，高端岗位交付周期缩短 20%……"' },
+        ],
+      },
+    ],
+  },
+  {
+    icon: ClipboardCheck,
+    headline: '下次面试，照着清单准备',
+    copy: '报告最后收敛成一张按优先级排序的准备清单，每一条都可以直接执行，练完就能用。',
+    sections: [
+      {
+        id: 'c3',
+        title: '下一次面试准备清单',
+        bullets: [
+          { label: '动作 1', text: '为 2 个核心项目各补 3 个量化指标（完成率、交付周期、成本）' },
+          { label: '动作 2', text: '用 90 秒版本复述"最复杂项目"，录音自查主线是否聚焦' },
+          { label: '动作 3', text: '对照目标 JD 整理 5 个高频行为问题，写出 STAR 提纲' },
+        ],
+      },
+    ],
+  },
+];
+
+const RECRUITER_GROUPS: SampleGroup[] = [
   {
     icon: FileBarChart,
     headline: '基础信息与组织环境，不再遗漏',
@@ -88,6 +160,13 @@ const SAMPLE_GROUPS: SampleGroup[] = [
   },
 ];
 
+const REPORT_MODES = [
+  { id: 'candidate', label: '求职者 · 复盘报告', icon: UserRound, activeClass: 'bg-violet-600 text-white shadow-sm' },
+  { id: 'recruiter', label: '招聘方 · 评估报告', icon: Users, activeClass: 'bg-indigo-600 text-white shadow-sm' },
+] as const;
+
+type ReportMode = (typeof REPORT_MODES)[number]['id'];
+
 const ReportCard: React.FC<{ section: SampleSection }> = ({ section }) => {
   return (
     <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
@@ -116,18 +195,41 @@ const ReportCard: React.FC<{ section: SampleSection }> = ({ section }) => {
 };
 
 const SampleReportSection: React.FC = () => {
+  const [mode, setMode] = useState<ReportMode>('candidate');
+  const groups = mode === 'candidate' ? CANDIDATE_GROUPS : RECRUITER_GROUPS;
+
   return (
     <section className="bg-slate-50 text-slate-900 py-20 border-t border-slate-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-14">
-          <h3 className="text-3xl font-extrabold tracking-tight">一份报告，讲清一个候选人</h3>
+        <div className="text-center mb-10">
+          <h3 className="text-3xl font-extrabold tracking-tight">两种视角，两份报告</h3>
           <p className="mt-3 text-slate-600">
-            从基础概览到风险提示，结论先行、证据可查、建议可执行。以下为脱敏示例，即最终交付效果。
+            求职者拿到成长路径，招聘方拿到录用依据。以下为脱敏示例，即最终交付效果。
           </p>
+          <div className="mt-8 flex justify-center">
+            <div className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 p-1">
+              {REPORT_MODES.map((m) => {
+                const Icon = m.icon;
+                const active = mode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setMode(m.id)}
+                    className={`inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium transition-colors ${
+                      active ? m.activeClass : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="space-y-14">
-          {SAMPLE_GROUPS.map((group, gi) => {
+          {groups.map((group, gi) => {
             const Icon = group.icon;
             return (
               <div

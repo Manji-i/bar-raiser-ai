@@ -6,7 +6,7 @@ import type { AnalysisMode } from '../types';
 import { modePath, setPostLoginMode } from '../services/analysisMode';
 import {
   BrainCircuit, LogIn, ArrowRight, UploadCloud, ScanSearch, FileBarChart,
-  ClipboardCheck, Crosshair, Sparkles, History, MessageSquareQuote, UserRound,
+  ClipboardCheck, Crosshair, Sparkles, History, MessageSquareQuote, UserRound, Users,
 } from 'lucide-react';
 
 // Scroll-triggered reveal wrapper (IntersectionObserver, no external animation lib)
@@ -65,7 +65,30 @@ const WORKFLOW_STEPS = [
   },
 ];
 
-const FEATURES = [
+const CANDIDATE_FEATURES = [
+  {
+    icon: Crosshair,
+    title: '核心问题定位',
+    desc: '从整份面试记录中聚焦 3–5 个最影响表现的问题，逐个拆到根因。',
+  },
+  {
+    icon: MessageSquareQuote,
+    title: '示范回答生成',
+    desc: '基于你的真实经历重组回答结构，给出可以直接练习的示范。',
+  },
+  {
+    icon: ClipboardCheck,
+    title: '面试准备清单',
+    desc: '输出下一次面试前可执行的准备动作，按优先级排序。',
+  },
+  {
+    icon: History,
+    title: '成长档案留存',
+    desc: '每次复盘自动归档，多场对比看清自己的进步轨迹。',
+  },
+];
+
+const RECRUITER_FEATURES = [
   {
     icon: ScanSearch,
     title: 'STAR 证据提取',
@@ -191,7 +214,7 @@ const LandingPage: React.FC = () => {
               </span>
             </Reveal>
             <Reveal delay={100}>
-              <h2 className="mt-6 text-4xl md:text-5xl font-extrabold text-white leading-tight tracking-tight">
+              <h2 className="mt-6 text-4xl md:text-5xl font-extrabold text-white leading-[1.6] tracking-tight">
                 一场面试，
                 <br />
                 <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
@@ -201,8 +224,7 @@ const LandingPage: React.FC = () => {
             </Reveal>
             <Reveal delay={200}>
               <p className="mt-6 text-base md:text-lg text-slate-400 leading-relaxed max-w-xl">
-                无论你想复盘自己的表现，还是判断候选人与岗位是否匹配，
-                都可以从同一份面试记录中找到真实行为证据。
+                复盘自己，判断他人——同一份面试记录，看清真实行为证据。
               </p>
             </Reveal>
             <Reveal delay={300}>
@@ -351,13 +373,13 @@ const LandingPage: React.FC = () => {
       <section id="recruiter-intro" className="scroll-mt-16 relative bg-white text-slate-900 py-20 border-t-4 border-indigo-500">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal>
-            <div className="text-center mb-14">
-              <div className="text-xs font-semibold text-indigo-600 tracking-widest mb-3">招聘方模式 · 判断他人</div>
-              <h3 className="text-3xl font-extrabold tracking-tight">三步完成一次专业评估</h3>
-              <p className="mt-3 text-slate-600">从岗位胜任力和面试记录出发，生成人岗匹配与录用建议。</p>
+            <div className="max-w-3xl">
+              <div className="text-xs font-semibold text-indigo-600 tracking-widest">招聘方模式 · 判断他人</div>
+              <h3 className="mt-3 text-3xl font-extrabold tracking-tight">三步完成一次专业评估</h3>
+              <p className="mt-4 text-slate-600 leading-relaxed">从岗位胜任力和面试记录出发，生成人岗匹配与录用建议。</p>
             </div>
           </Reveal>
-          <div className="grid md:grid-cols-3 gap-6 relative">
+          <div className="mt-10 grid md:grid-cols-3 gap-6 relative">
             {/* 桌面端连线 */}
             <div className="hidden md:block absolute top-12 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-indigo-200 via-violet-300 to-indigo-200" />
             {WORKFLOW_STEPS.map((step, i) => {
@@ -377,14 +399,12 @@ const LandingPage: React.FC = () => {
             })}
           </div>
           <Reveal delay={300}>
-            <div className="mt-8 text-center">
-              <button
-                onClick={() => enterMode('recruiter')}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-              >
-                开始评估候选人 <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              onClick={() => enterMode('recruiter')}
+              className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+            >
+              开始评估候选人 <ArrowRight className="w-4 h-4" />
+            </button>
           </Reveal>
         </div>
       </section>
@@ -395,20 +415,57 @@ const LandingPage: React.FC = () => {
           <Reveal>
             <div className="text-center mb-14">
               <h3 className="text-3xl font-extrabold tracking-tight">核心能力</h3>
-              <p className="mt-3 text-slate-600">为 Bar Raiser 和招聘团队打造的评估工具箱。</p>
+              <p className="mt-3 text-slate-600">同一套行为证据引擎，帮求职者看清成长路径，帮招聘方看清人岗匹配。</p>
             </div>
           </Reveal>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {FEATURES.map((f, i) => {
-              const Icon = f.icon;
+          <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
+            {[
+              {
+                label: '求职者 · 提升自己',
+                icon: UserRound,
+                iconClass: 'bg-violet-600',
+                labelClass: 'text-violet-700',
+                panelClass: 'bg-violet-50/70 border-violet-100',
+                features: CANDIDATE_FEATURES,
+              },
+              {
+                label: '招聘方 · 判断他人',
+                icon: Users,
+                iconClass: 'bg-indigo-600',
+                labelClass: 'text-indigo-700',
+                panelClass: 'bg-indigo-50/70 border-indigo-100',
+                features: RECRUITER_FEATURES,
+              },
+            ].map((group) => {
+              const GroupIcon = group.icon;
               return (
-                <Reveal key={f.title} delay={i * 100}>
-                  <div className="h-full rounded-2xl border border-slate-200 p-6 hover:border-indigo-300 hover:shadow-lg hover:shadow-indigo-100 transition-all duration-300 group">
-                    <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center mb-4 group-hover:bg-gradient-to-br group-hover:from-indigo-500 group-hover:to-violet-500 group-hover:text-white transition-all">
-                      <Icon className="w-5 h-5" />
+                <Reveal key={group.label}>
+                  <div className={`h-full rounded-3xl border p-6 sm:p-8 ${group.panelClass}`}>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-sm ${group.iconClass}`}>
+                        <GroupIcon className="w-5 h-5" />
+                      </div>
+                      <div className={`text-lg font-extrabold tracking-tight ${group.labelClass}`}>
+                        {group.label}
+                      </div>
                     </div>
-                    <h4 className="font-bold mb-2">{f.title}</h4>
-                    <p className="text-sm text-slate-600 leading-relaxed">{f.desc}</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {group.features.map((f) => {
+                        const Icon = f.icon;
+                        return (
+                          <div
+                            key={f.title}
+                            className="h-full bg-white rounded-2xl border border-slate-200 p-6 hover:border-indigo-300 hover:shadow-lg hover:shadow-indigo-100 transition-all duration-300 group"
+                          >
+                            <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center mb-4 group-hover:bg-gradient-to-br group-hover:from-indigo-500 group-hover:to-violet-500 group-hover:text-white transition-all">
+                              <Icon className="w-5 h-5" />
+                            </div>
+                            <h4 className="font-bold mb-2">{f.title}</h4>
+                            <p className="text-sm text-slate-600 leading-relaxed">{f.desc}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </Reveal>
               );
