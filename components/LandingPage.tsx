@@ -333,7 +333,10 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal>
             <div className="max-w-3xl">
-              <div className="text-xs font-semibold text-violet-600 tracking-widest">求职者模式 · 提升自己</div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-1.5 text-sm font-bold text-violet-700">
+                <UserRound className="w-4 h-4" />
+                求职者模式 · 提升自己
+              </div>
               <h3 className="mt-3 text-3xl font-extrabold tracking-tight">面试结束了，但成长才刚开始</h3>
               <p className="mt-4 text-slate-600 leading-relaxed lg:whitespace-nowrap">
                 上传目标岗位、简历与面试记录，集中找出 3–5 个最影响表现的核心问题，获得可以直接练习的回答结构与行动建议。
@@ -374,7 +377,10 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal>
             <div className="max-w-3xl">
-              <div className="text-xs font-semibold text-indigo-600 tracking-widest">招聘方模式 · 判断他人</div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1.5 text-sm font-bold text-indigo-700">
+                <Users className="w-4 h-4" />
+                招聘方模式 · 判断他人
+              </div>
               <h3 className="mt-3 text-3xl font-extrabold tracking-tight">三步完成一次专业评估</h3>
               <p className="mt-4 text-slate-600 leading-relaxed">从岗位胜任力和面试记录出发，生成人岗匹配与录用建议。</p>
             </div>
