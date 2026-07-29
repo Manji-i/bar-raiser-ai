@@ -77,9 +77,9 @@
 - `/`：公开产品首页（`components/LandingPage.tsx`），无需登录；已登录用户看到的是"进入应用"入口。
 - `/app/candidate`、`/app/recruiter`：候选人复盘与招聘评估工作台，受保护。
 - `/history/candidate`、`/history/recruiter`：两种模式独立历史；不得混排或给 Candidate 报告显示招聘评分。
-- `/app`、`/history`：兼容入口，根据上次使用的模式重定向；无记录时默认 `recruiter`。
+- `/app`、`/history`：兼容入口，根据 `AuthContext.analysisMode` 重定向；缺少合法登录角色时失败关闭，不再按最近使用模式或默认角色进入业务页。
 - `/report/:id`：按报告自身 `analysisMode` 渲染；`/admin`：管理员后台。未登录访问受保护路由统一重定向到 `/`。
-- 登录成功或已登录访问 `/login` 时优先恢复待跳转模式。应用内返回/新建分析必须回到当前模式的 `/app/<mode>`，不要写回 `/`。
+- 未登录用户从首页进入 `/login` 时，登录前意图只用于预选角色；提交时选择的角色成为锁定角色。已登录访问 `/login` 时直接进入锁定角色工作台。应用内返回/新建分析必须回到当前模式的 `/app/<mode>`，不要写回 `/`。
 
 ## 视觉体系
 
@@ -116,6 +116,7 @@
 ## 代码注意点
 
 - 认证统一使用 `Authorization: Bearer <token>`。
+- 当前登录角色锁是客户端产品约束，不是服务端授权边界；不要把浏览器角色值或请求中的 `analysisMode` 当作可信权限信息。需要强隔离时按 `docs/未来需迭代内容.md` 升级为服务端 token 绑定角色。
 - 普通用户只能访问自己的报告；管理员入口需要后端权限校验。
 - Prompt 相关接口属于高权限能力，新增或调整时必须考虑认证和管理员限制。
 - Recruiter 与 Candidate Prompt 分别存于 `system_prompt` 和 `candidate_system_prompt`；Candidate 首版禁止复用 Recruiter 的反馈自动迭代。

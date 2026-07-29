@@ -1,78 +1,55 @@
 # Eval Bar AI 当前交接状态
 
-## 2026-07-28 本地迭代（尚未发布）
+## 当前部署检查点
 
-- 登录与注册页增加“提升自己 / 判断他人”角色选择，按钮文案仍为“登录 / 注册”。
-- 登录角色与认证状态共同存储；缺少合法角色时失败关闭，登录后顶部导航不再提供角色切换。
-- `/app`、`/history`、模式路由、首页入口和报告详情统一服从登录角色；历史列表只保留当前角色报告。
-- 首页和 Candidate 上传区的外部 SVG 已替换为 `lucide-react`，目标职位名称与 JD 输入区域改为等高。
-- Candidate“本场表现结论”通过 `candidate-conclusion-v2` 输出契约固定为三个独立段落：一句话总结、本场重点、下次准备。
-- 旧数据库 Candidate Prompt 在模型调用前动态追加一次新契约；本次没有数据库 schema 变更，也不需要 Prompt 数据迁移。
-- 强化版 A 的剩余安全风险与服务端 token 绑定升级条件见[未来需迭代内容](未来需迭代内容.md)。
+截至 2026-07-28 的部署检查点，本地 `main`、GitHub `origin/main` 与生产服务器均为提交 `660542c2fd833182c8d06e8981909c196cc054de`（`chore: upgrade dependencies for security`）。本次知识整理只产生本地文档改动，尚未提交、推送或重新部署。
 
-本次本地验证命令：
+- 线上地址：`http://14.103.45.4:3000/`
+- 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
+- PM2 进程：`bar-raiser-ai`，状态 `online`
+- 当前首页资源：`/assets/index-BAh5B3nU.js`
+- 最近完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260728-143522`
+- 分支与 worktree：仅保留 `main`；已完成的功能分支和对应 worktree 已删除
 
-```bash
-npm test
-npm run build
-```
+依赖升级部署后，本地与生产均已运行当前 37 项自动化测试，`npm run build` 通过；生产首页返回 `200`，未认证报告接口返回 `401`。
 
-以上内容当前仅在 `codex/login-role-lock` 分支，不代表已经推送 GitHub 或部署生产。
+## 已交付能力
 
-## 当前能力
+- 登录和注册时选择“提升自己 / 判断他人”，按钮文案保持“登录 / 注册”；登录后产品内不能切换角色。
+- `/app`、`/history`、显式模式路由、首页入口和报告详情统一服从 `AuthContext.analysisMode`，历史列表只展示当前角色报告。
+- Candidate“提升自己”支持职位名称、选填 JD、选填简历和面试记录；报告不打招聘分，聚焦少数核心问题。
+- Recruiter“判断他人”保留胜任力、STAR、人岗匹配评分和招聘建议。
+- Candidate“本场表现结论”由 `candidate-conclusion-v2` 契约固定为“一句话总结 / 本场重点 / 下次准备”三个独立段落；旧数据库 Prompt 在调用前动态兼容，无需迁移。
+- 产品图标已改为随应用构建的 `lucide-react` 图标；Candidate 职位名称与 JD 输入区域等高。
+- 简历支持 PDF、DOCX、TXT，最大 10 MB；低质量解析文本不会直接进入模型，源文件通过受保护接口下载。
 
-项目已具备完整双模式入口和共享分析管线：
+## 安全边界
 
-- Candidate“提升自己”：职位名称与面试记录必填，JD、简历选填；报告不打分，默认聚焦 3 个、最多 5 个核心问题。
-- Recruiter“判断他人”：保留胜任力、STAR、人岗匹配评分和招聘建议。
-- 两种模式共享账号、AI Provider、存储、反馈与导出，但 Prompt、报告结构和历史列表独立。
-- 简历支持 PDF、DOCX、TXT，最大 10 MB；解析质量低时允许人工补充，源文件受保护存储。
-- 管理员可分别读取和更新 Candidate / Recruiter Prompt 版本。
+普通用户报告和简历的所有权由服务端校验，管理员能力也由服务端 `isAdmin` 校验。但当前角色锁定仍是客户端产品约束：登录/注册 API 不保存角色，token 也没有绑定角色；同一账号可以修改浏览器存储或直接构造 API 请求访问本人另一模式的数据。
 
-## 已验证
+服务端 token 绑定角色、密码哈希、token 过期、登录限流、管理员初始化和前端第三方依赖等风险统一在[未来需迭代内容](未来需迭代内容.md)维护。
 
-2026-07-27 的功能与部署验收包括：
+## 尚未完成的生产验证
 
-- `npm test`：24/24 通过。
-- `npm run build`：通过。
-- 桌面与 390px 移动首页无横向溢出。
-- 首页双入口、Candidate CTA 登录跳转和受保护路由通过。
-- 生产首页与静态资源返回 `200`，未认证 Candidate 报告接口返回 `401`。
-- 生产 PM2 `bar-raiser-ai` 为 `online`。
-- `candidate_system_prompt`、`report_attachments` 与 reports 新列已经在生产 schema 中存在。
-- 生产代码功能检查点为 `12b5fca`，首页 asset 为 `/assets/index-Dte5Pbtw.js`。
+- 未创建合成生产账号并发起真实 Gemini / Doubao 分析请求。
+- 未使用两个合成账号验证跨账号简历下载一定被拒绝。
+- 未创建并删除合成 Candidate 报告验证附件物理清理。
 
-## 尚未完成的验证
+这些步骤会产生生产数据、模型费用或删除操作，执行前必须单独确认测试账号、合成材料和清理范围。
 
-- 没有在生产环境创建合成账号并发起一次真实 AI 请求。
-- 没有在生产环境用两个账号执行跨账号简历下载权限测试。
-- 没有在生产环境创建后再删除合成 Candidate 报告验证文件物理清理。
-- PM2 历史日志中存在旧模型/连接错误记录；本次重启后只确认服务在线和页面可用，未用真实模型请求验证当前 Provider 配置。
+## 当前技术债
 
-这些验证会产生生产数据、模型费用或删除操作，执行前应单独批准测试账号、合成材料和清理范围。
-
-## 仓库与部署状态
-
-- 本地 `main` 和生产功能检查点已快进到 `12b5fca`。
-- GitHub `origin/main` 仍停留在 `f6eb4ba`；功能尚未推送 GitHub。
-- 本次知识同步会产生新的本地文档提交，但不会自动推送或重新部署。
-- 生产目录存在既有未跟踪备份目录 `data.backup-20260721-230653/`，未触碰。
-- 本地原工作区仍有用户自己的 `AGENTS.md`、`components/FileUpload.tsx`、`index.html` 和原型素材改动；功能合并和文档同步使用隔离 worktree，未覆盖它们。
-
-## 已知技术债
-
-- 生产构建会提示 Tailwind CDN 不适合生产使用。
-- 主前端 bundle 超过 Vite 默认 500 kB 提示线，尚未拆包。
-- `npm audit` 当前报告 17 个依赖漏洞；没有执行可能引入破坏性升级的 `npm audit fix`。
+- `npm audit` 仍报告 2 个 high，均来自 React Router 的 RSC Action CSRF 公告 `GHSA-qwww-vcr4-c8h2`；当前应用使用 `BrowserRouter`，未使用 RSC API，因此现有架构不受该攻击路径影响。继续按风险登记跟踪，不运行破坏性的自动修复。
+- Tailwind、HTML 转 PDF、Google Fonts 和 PDF worker 仍依赖第三方 CDN；尚未建立严格 CSP。
+- Vite 构建仍提示主 bundle 超过默认 500 kB；Tailwind CDN 和错误设置 `NODE_ENV=production` 也会产生已知提示。
 - 简历首版没有 OCR、病毒扫描或自动重解析。
-- 客户端角色锁不构成服务端授权边界；服务端 token 绑定、密码哈希、token 过期、登录限流和管理员初始化风险统一在[未来需迭代内容](未来需迭代内容.md)维护。
 
-## 下一步建议
+## 下一步优先级
 
-1. 明确授权后把本地 `main` 推送到 GitHub，使 `origin/main` 与生产一致。
-2. 使用合成账号和材料完成真实 AI、跨账号附件权限、删除清理三项生产验收。
-3. 将 Tailwind 从 CDN 迁移到构建链，并删除失效的 `/index.css` 引用。
-4. 对依赖漏洞做影响分析和分批升级，不直接运行全量自动修复。
+1. 用户量、企业客户或合规要求上升前，把角色升级为服务端 token 绑定并同步修复认证风险。
+2. 用获批的合成账号完成真实 AI、跨账号附件权限和删除清理三项生产验收。
+3. 将第三方前端运行时依赖纳入构建，增加 CSP，并拆分大 bundle。
+4. 持续跟踪 React Router 公告；采用 RSC 前或官方提供兼容修复后重新评估升级。
 
 ## 权威文档
 
@@ -80,5 +57,6 @@ npm run build
 - [接口接入指南](integration-guide.md)
 - [运维手册](operator-runbook.md)
 - [部署指南](../DEPLOYMENT.md)
-- [候选人模式设计规格](superpowers/specs/2026-07-27-candidate-interview-coaching-design.md)
 - [未来需迭代内容](未来需迭代内容.md)
+- [登录角色锁定设计](superpowers/specs/2026-07-28-login-role-lock-and-ux-polish-design.md)
+- [候选人模式设计规格](superpowers/specs/2026-07-27-candidate-interview-coaching-design.md)

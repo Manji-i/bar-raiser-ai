@@ -17,9 +17,15 @@
 ```bash
 ssh root@14.103.45.4
 cd /root/bar-raiser-ai-new/bar-raiser-ai
+umask 077
+mkdir -p /root/bar-raiser-ai-backups
+deploy_backup_dir="/root/bar-raiser-ai-backups/data-before-$(date +%Y%m%d-%H%M%S)"
+cp -a data "$deploy_backup_dir"
+chmod -R go-rwx "$deploy_backup_dir"
 git fetch origin
 git pull --ff-only origin main
-npm install
+npm ci
+npm test
 npm run build
 pm2 restart bar-raiser-ai --update-env
 pm2 save
@@ -51,11 +57,14 @@ scp /private/tmp/bar-raiser-ai-main.bundle root@14.103.45.4:/tmp/bar-raiser-ai-m
 cd /root/bar-raiser-ai-new/bar-raiser-ai
 umask 077
 mkdir -p /root/bar-raiser-ai-backups
-cp -a data "/root/bar-raiser-ai-backups/data-before-$(date +%Y%m%d-%H%M%S)"
+deploy_backup_dir="/root/bar-raiser-ai-backups/data-before-$(date +%Y%m%d-%H%M%S)"
+cp -a data "$deploy_backup_dir"
+chmod -R go-rwx "$deploy_backup_dir"
 git bundle verify /tmp/bar-raiser-ai-main.bundle
 git fetch /tmp/bar-raiser-ai-main.bundle main
 git merge --ff-only FETCH_HEAD
-npm install
+npm ci
+npm test
 npm run build
 pm2 restart bar-raiser-ai --update-env
 pm2 save
@@ -95,7 +104,8 @@ Dockerfile 会复制 `server.js`、`services/` 和 `dist/`，并创建可写的 
 ## 直接部署
 
 ```bash
-npm install
+npm ci
+npm test
 npm run build
 npm start
 ```

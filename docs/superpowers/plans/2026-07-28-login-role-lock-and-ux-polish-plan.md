@@ -4,6 +4,8 @@
 
 **Goal:** 在不修改数据库 schema 的前提下实现登录角色锁定、角色内路由与历史隔离，并修复外部图标、Candidate 表单对齐和报告结论格式。
 
+**Execution status (2026-07-28):** Task 1–7 已完成、合并并部署；依赖安全升级随后单独完成。本文保留为实施记录，当前提交、测试和生产状态以 `docs/handoff.md` 为准。
+
 **Architecture:** 使用 `AuthContext` 管理与认证同生命周期的客户端锁定角色，所有业务路由和页面从该上下文读取模式并失败关闭。Candidate Prompt 通过带版本标记的代码级输出契约兼容已有数据库 Prompt；外部图标替换为构建内 Lucide 图标。强化版 A 的服务端绕过风险记录在独立维护文档中。
 
 **Tech Stack:** React 19、TypeScript、React Router 7、Node.js ESM、Express、SQLite、Node Test Runner、Vite、Tailwind CDN、lucide-react

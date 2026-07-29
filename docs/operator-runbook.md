@@ -19,7 +19,7 @@
 git fetch origin
 git status -sb
 git log --oneline --left-right main...origin/main
-npm install
+npm ci
 npm test
 npm run build
 ```
@@ -28,8 +28,8 @@ npm run build
 
 - 部署来源是明确的本地 `main` 提交。
 - 没有把 `.env*`、`data/`、候选人材料或原型文件纳入提交。
-- 24 个现有自动化测试全部通过；新增测试后以实际总数为准。
-- 生产构建成功。Tailwind CDN 和大 chunk 是当前已知警告，不等于构建失败。
+- 当前 37 个自动化测试全部通过；新增测试后以实际总数为准。
+- 生产构建成功。Tailwind CDN、大 chunk 和 Vite 对 `.env` 中 `NODE_ENV=production` 的提示是当前已知警告，不等于构建失败；不要在 `.env` 中设置该值。
 
 ## 3. 数据备份
 
@@ -39,7 +39,9 @@ Candidate 功能同时依赖 SQLite 与 `data/uploads/resumes/`。只备份 `app
 cd /root/bar-raiser-ai-new/bar-raiser-ai
 umask 077
 mkdir -p /root/bar-raiser-ai-backups
-cp -a data "/root/bar-raiser-ai-backups/data-before-$(date +%Y%m%d-%H%M%S)"
+deploy_backup_dir="/root/bar-raiser-ai-backups/data-before-$(date +%Y%m%d-%H%M%S)"
+cp -a data "$deploy_backup_dir"
+chmod -R go-rwx "$deploy_backup_dir"
 ```
 
 备份目录应为 root-only，不进入 Web 目录或 Git。恢复属于数据覆盖操作，必须单独确认后执行。
