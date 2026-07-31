@@ -8,6 +8,7 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnalysisMode, AnalysisState, Report } from '../types';
 import { modePath, reportMatchesAuthMode } from '../services/analysisMode';
+import { withPdfExportLayout } from '../services/pdfExport';
 
 // 辅助函数：获取带认证的请求头
 const getAuthHeaders = () => {
@@ -546,7 +547,9 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     };
 
     try {
-      await html2pdf().set(opt).from(element).save();
+      await withPdfExportLayout(element, async () => {
+        await html2pdf().set(opt).from(element).save();
+      });
     } catch (e) {
       console.error("PDF Generation failed", e);
       alert("PDF 生成失败，您可以尝试打印本页面。");
