@@ -64,6 +64,36 @@ flowchart LR
 
 Recruiter 继续使用职位名称、胜任力要求和面试记录。旧客户端未传 `analysisMode` 时默认 `recruiter`，以保持兼容。Recruiter Prompt、评分解析、历史统计和反馈选项保持独立。
 
+### 4.3 报告 PDF 导出
+
+Candidate 与 Recruiter 报告使用同一套结构化文档模型。网页和 PDF 都消费 `services/reportDocumentModel.ts` 解析出的 `ReportDocumentModel`，避免两套 Markdown 解析逻辑产生内容差异。
+
+```mermaid
+flowchart LR
+  View["ReportView"] --> Model["ReportDocumentModel"]
+  Model --> Hook["usePreparedReportPdf"]
+  Hook --> Client["reportPdfClient"]
+  Client --> Worker["reportPdf.worker"]
+  Worker --> Engine["pdfmake + Noto Sans SC VFS"]
+  Engine --> Blob["PDF Blob"]
+  Blob --> Download["隐藏 a download 直接下载"]
+```
+
+报告页首屏完成后，`usePreparedReportPdf` 在空闲时预生成 PDF。用户点击时复用同一个 Promise 或已缓存的 Blob；Blob 已准备好时立即触发浏览器下载，不打开打印或系统存储窗口。切换报告或离开页面时会终止 Worker、撤销对象 URL 并清空缓存，失败后允许重新生成。
+
+PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和复制，也不会在图片切页处截断。`pdfmake` 只打入独立 Worker chunk，两份 Noto Sans SC 字体从 `public/fonts/` 自托管并在单次 Worker 生命周期内只加载一次。生成结果只保存在当前浏览器内存中，不上传服务端、不写入 SQLite，也不新增数据库字段。
+
+前端导出模块：
+
+| 模块 | 职责 |
+|---|---|
+| `services/reportDocumentModel.ts` | 把 Candidate / Recruiter Markdown 解析为共享文档模型 |
+| `services/pdf/reportPdfDocument.ts` | 构建 A4 文字型 PDF 文档定义和分页规则 |
+| `services/pdf/reportPdfProtocol.ts` | 约束页面与 Worker 的请求、响应和错误协议 |
+| `services/pdf/reportPdf.worker.ts` | 加载字体、运行 pdfmake 并返回 PDF Blob |
+| `services/pdf/reportPdfClient.ts` | 管理 Worker、Promise、Blob、对象 URL、超时和重复下载锁 |
+| `services/pdf/usePreparedReportPdf.ts` | 在 React 生命周期内预生成、下载和释放资源 |
+
 ## 5. 后端模块
 
 | 模块 | 职责 |

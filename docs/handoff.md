@@ -23,6 +23,20 @@
 - 产品图标已改为随应用构建的 `lucide-react` 图标；Candidate 职位名称与 JD 输入区域等高。
 - 简历支持 PDF、DOCX、TXT，最大 10 MB；低质量解析文本不会直接进入模型，源文件通过受保护接口下载。
 
+## 2026-08-03 本地待发布：文字型 PDF 导出
+
+`codex/pdf-text-export` 分支已完成浏览器端文字型 PDF 导出，当前只在本地提交和验证，尚未推送 GitHub，也未部署生产。
+
+- 用户点击“导出 PDF”后由隐藏的 `<a download>` 直接下载，不打开打印或系统存储窗口。
+- 网页和 PDF 共用 `ReportDocumentModel`；Candidate 与 Recruiter 保持各自内容语义。
+- `pdfmake` 在独立 Web Worker 中排版，报告页空闲时预生成并缓存 Blob；字体自托管且单次生成只加载一次。
+- 旧 `html2pdf/html2canvas` CDN、整页截图导出和系统打印路径已经移除。
+- 匿名真实长度夹具验证结果：Recruiter 4 页、Candidate 2 页、超长连续段落 6 页；12 页逐页检查均未发现截字、重叠、缺字或孤立标题。
+- 冷缓存 Blob ready 中位数 890.6 ms，热缓存 284.5 ms，Blob ready 后点击触发下载中位数 0.3 ms；主线程未观察到超过 50 ms 的长任务。
+- 当前 Chromium 不提供包含 Worker 的精确峰值内存数据，因此没有把 Worker 峰值内存写成已确认结论。
+
+完整验证数据见[客户端文字型 PDF 导出验证记录](superpowers/verification/2026-08-03-client-side-text-pdf-export.md)。
+
 ## 安全边界
 
 普通用户报告和简历的所有权由服务端校验，管理员能力也由服务端 `isAdmin` 校验。但当前角色锁定仍是客户端产品约束：登录/注册 API 不保存角色，token 也没有绑定角色；同一账号可以修改浏览器存储或直接构造 API 请求访问本人另一模式的数据。
@@ -40,7 +54,7 @@
 ## 当前技术债
 
 - `npm audit` 仍报告 2 个 high，均来自 React Router 的 RSC Action CSRF 公告 `GHSA-qwww-vcr4-c8h2`；当前应用使用 `BrowserRouter`，未使用 RSC API，因此现有架构不受该攻击路径影响。继续按风险登记跟踪，不运行破坏性的自动修复。
-- Tailwind、HTML 转 PDF、Google Fonts 和 PDF worker 仍依赖第三方 CDN；尚未建立严格 CSP。
+- Tailwind 和 Google Fonts 仍依赖第三方 CDN；PDF 导出已移除 `html2pdf` CDN，PDF Worker 与 Noto Sans SC 字体已自托管；尚未建立严格 CSP。
 - Vite 构建仍提示主 bundle 超过默认 500 kB；Tailwind CDN 和错误设置 `NODE_ENV=production` 也会产生已知提示。
 - 简历首版没有 OCR、病毒扫描或自动重解析。
 
