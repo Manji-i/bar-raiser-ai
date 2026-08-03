@@ -83,6 +83,7 @@ const buildHero = (model: ReportDocumentModel): Content => {
 
 const sectionBand = (title: string): Content => ({
   table: {
+    dontBreakRows: true,
     widths: ['*'],
     body: [[{ text: title, style: 'sectionTitle', margin: [10, 7, 10, 7] }]],
   },
@@ -93,22 +94,32 @@ const sectionBand = (title: string): Content => ({
   },
   margin: [0, 8, 0, 8],
   headlineLevel: 1,
+  unbreakable: true,
 });
 
-const paragraphCard = (text: string, fillColor = '#FFFFFF'): Content => ({
-  table: {
-    widths: ['*'],
-    body: [[{ text: toPdfRuns(text), style: 'body', margin: [9, 7, 9, 7] }]],
-  },
-  layout: {
-    fillColor: () => fillColor,
-    hLineColor: () => PDF.slate200,
-    vLineColor: () => PDF.slate200,
-    hLineWidth: () => 0.6,
-    vLineWidth: () => 0.6,
-  },
-  margin: [0, 0, 0, 6],
-});
+const paragraphCard = (text: string, fillColor = '#FFFFFF'): Content => {
+  if (text.length > 800) {
+    return {
+      text: toPdfRuns(text),
+      style: 'body',
+      margin: [9, 7, 9, 7],
+    };
+  }
+  return {
+    table: {
+      widths: ['*'],
+      body: [[{ text: toPdfRuns(text), style: 'body', margin: [9, 7, 9, 7] }]],
+    },
+    layout: {
+      fillColor: () => fillColor,
+      hLineColor: () => PDF.slate200,
+      vLineColor: () => PDF.slate200,
+      hLineWidth: () => 0.6,
+      vLineWidth: () => 0.6,
+    },
+    margin: [0, 0, 0, 6],
+  };
+};
 
 const markdownBody = (body: string): Content[] => body
   .split(/\n\s*\n/)
@@ -232,6 +243,9 @@ export const buildReportPdfDocument = (model: ReportDocumentModel): TDocumentDef
   content: buildContent(model),
   pageBreakBefore: (node, container) => (
     (node.headlineLevel === 1 || node.headlineLevel === 2)
-    && container.getFollowingNodesOnPage().length === 0
+    && (
+      node.startPosition.verticalRatio > 0.8
+      || container.getFollowingNodesOnPage().length === 0
+    )
   ),
 });
