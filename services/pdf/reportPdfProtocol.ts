@@ -1,3 +1,5 @@
+import type { ReportDocumentModel } from '../reportDocumentModel.ts';
+
 export type PdfWorkerErrorCode =
   | 'FONT_LOAD_FAILED'
   | 'PDF_BUILD_FAILED'
@@ -5,7 +7,7 @@ export type PdfWorkerErrorCode =
 
 export type PdfWorkerRequest =
   | { type: 'probe'; requestId: string }
-  | { type: 'render'; requestId: string; model: unknown };
+  | { type: 'render'; requestId: string; model: ReportDocumentModel };
 
 export type PdfWorkerResponse =
   | { type: 'success'; requestId: string; blob: Blob }

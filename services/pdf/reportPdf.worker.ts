@@ -3,6 +3,7 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 import type { PdfWorkerRequest, PdfWorkerResponse } from './reportPdfProtocol.ts';
+import { buildReportPdfDocument } from './reportPdfDocument.ts';
 
 const FONT_URLS = {
   normal: new URL('/fonts/NotoSansSC-Regular-v1.otf', self.location.origin).href,
@@ -44,7 +45,7 @@ const probeDocument = (): TDocumentDefinitions => ({
 const send = (message: PdfWorkerResponse) => self.postMessage(message);
 
 self.onmessage = async ({ data }: MessageEvent<PdfWorkerRequest>) => {
-  if (!data || data.type !== 'probe') return;
+  if (!data || (data.type !== 'probe' && data.type !== 'render')) return;
   try {
     await ensureFonts();
   } catch {
@@ -58,7 +59,10 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerRequest>) => {
   }
 
   try {
-    const blob = await pdfMake.createPdf(probeDocument()).getBlob();
+    const documentDefinition = data.type === 'render'
+      ? buildReportPdfDocument(data.model)
+      : probeDocument();
+    const blob = await pdfMake.createPdf(documentDefinition).getBlob();
     send({ type: 'success', requestId: data.requestId, blob });
   } catch {
     send({
