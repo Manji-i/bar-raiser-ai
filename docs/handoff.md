@@ -23,9 +23,9 @@
 - 产品图标已改为随应用构建的 `lucide-react` 图标；Candidate 职位名称与 JD 输入区域等高。
 - 简历支持 PDF、DOCX、TXT，最大 10 MB；低质量解析文本不会直接进入模型，源文件通过受保护接口下载。
 
-## 2026-08-03 本地待发布：文字型 PDF 导出
+## 2026-08-03 已发布：文字型 PDF 导出
 
-`codex/pdf-text-export` 分支已完成浏览器端文字型 PDF 导出，当前只在本地提交和验证，尚未推送 GitHub，也未部署生产。
+浏览器端文字型 PDF 导出已合并到 `main`、推送 GitHub 并部署生产，首个生产发布提交为 `109cb7e`。
 
 - 用户点击“导出 PDF”后由隐藏的 `<a download>` 直接下载，不打开打印或系统存储窗口。
 - 网页和 PDF 共用 `ReportDocumentModel`；Candidate 与 Recruiter 保持各自内容语义。
