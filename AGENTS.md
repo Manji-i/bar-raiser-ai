@@ -22,6 +22,7 @@
 - `services/*.js`：后端服务模块，例如用户、报告、Prompt、数据库连接（`db.js`）。
 - `server.js`：Express 入口、API 路由和静态资源托管。
 - `data/`：运行时数据目录，包含 SQLite 与 `uploads/resumes/` 简历源文件，只做本地运行和部署持久化，不提交。
+- `public/`：静态资产（如 `favicon.svg` 站点图标），构建时原样复制进 `dist/`。
 - `dist/`、`node_modules/`：生成物和依赖目录，不手改、不提交。
 - `.trae/`：工具技能目录，除非明确处理工具配置，否则不要纳入业务改动。
 

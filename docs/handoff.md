@@ -2,16 +2,17 @@
 
 ## 当前部署检查点
 
-截至 2026-07-28 的部署检查点，本地 `main`、GitHub `origin/main` 与生产服务器均为提交 `660542c2fd833182c8d06e8981909c196cc054de`（`chore: upgrade dependencies for security`）。本次知识整理只产生本地文档改动，尚未提交、推送或重新部署。
+截至 2026-08-03，本地 `main`、GitHub `origin/main` 与生产服务器均为提交 `d97c450`（`docs: record text PDF production deployment`）；文字型 PDF 功能的首个生产代码提交为 `109cb7e`。服务器直连 GitHub 不稳定，本次继续通过 Bundle 路径快进同步。
 
 - 线上地址：`http://14.103.45.4:3000/`
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
-- 当前首页资源：`/assets/index-BAh5B3nU.js`
-- 最近完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260728-143522`
+- 当前首页资源：`/assets/index-BYxbUDod.js`
+- 最近完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260803-162514`
+- 最近静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260803-163237`
 - 分支与 worktree：仅保留 `main`；已完成的功能分支和对应 worktree 已删除
 
-依赖升级部署后，本地与生产均已运行当前 37 项自动化测试，`npm run build` 通过；生产首页返回 `200`，未认证报告接口返回 `401`。
+合并后的 `main` 在本地完成 55 项自动化测试、生产构建和 12 页 PDF 校验；生产服务器完成 `npm ci` 和 55 项测试。服务器因 1.9 GB 内存且无 swap，不再承担本次 Vite 构建，改为发布本地已验证的 `dist/`。发布后 PM2 为 `online`，首页返回 `200`，未认证报告接口返回 `401`，主资源、PDF Worker 和两份字体均返回 `200`。
 
 ## 已交付能力
 
@@ -21,6 +22,7 @@
 - Recruiter“判断他人”保留胜任力、STAR、人岗匹配评分和招聘建议。
 - Candidate“本场表现结论”由 `candidate-conclusion-v2` 契约固定为“一句话总结 / 本场重点 / 下次准备”三个独立段落；旧数据库 Prompt 在调用前动态兼容，无需迁移。
 - 产品图标已改为随应用构建的 `lucide-react` 图标；Candidate 职位名称与 JD 输入区域等高。
+- 首页已重构为求职者/招聘方双视角：Hero 行距与单行副标题、两个模式介绍区统一左对齐布局、核心能力按角色分组面板展示、脱敏报告示例支持"求职者复盘 / 招聘方评估"切换；站点 favicon（`public/favicon.svg`）与标签页标题统一为 Eval Bar AI 品牌。
 - 简历支持 PDF、DOCX、TXT，最大 10 MB；低质量解析文本不会直接进入模型，源文件通过受保护接口下载。
 
 ## 2026-08-03 已发布：文字型 PDF 导出
@@ -56,6 +58,7 @@
 - `npm audit` 仍报告 2 个 high，均来自 React Router 的 RSC Action CSRF 公告 `GHSA-qwww-vcr4-c8h2`；当前应用使用 `BrowserRouter`，未使用 RSC API，因此现有架构不受该攻击路径影响。继续按风险登记跟踪，不运行破坏性的自动修复。
 - Tailwind 和 Google Fonts 仍依赖第三方 CDN；PDF 导出已移除 `html2pdf` CDN，PDF Worker 与 Noto Sans SC 字体已自托管；尚未建立严格 CSP。
 - Vite 构建仍提示主 bundle 超过默认 500 kB；Tailwind CDN 和错误设置 `NODE_ENV=production` 也会产生已知提示。
+- 生产服务器只有 1.9 GB 内存且没有 swap，直接执行 Vite 构建会耗尽资源；后续发布应优先在本地或 CI 完成构建并上传已验证的 `dist/`，或先扩容/增加 swap。
 - 简历首版没有 OCR、病毒扫描或自动重解析。
 
 ## 下一步优先级
