@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PDF Worker Probe</title>
+  </head>
+  <body>
+    <output id="result">running</output>
+    <script type="module">
+      import { probeReportPdfWorker } from '/services/pdf/reportPdfClient.ts';
+
+      const output = document.querySelector('#result');
+      const startedAt = performance.now();
+      try {
+        const blob = await probeReportPdfWorker();
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        output.textContent = JSON.stringify({
+          status: 'success',
+          type: blob.type,
+          size: blob.size,
+          elapsedMs: Math.round(performance.now() - startedAt),
+          signature: String.fromCharCode(...bytes.slice(0, 5)),
+        });
+      } catch (error) {
+        output.textContent = JSON.stringify({
+          status: 'error',
+          message: error instanceof Error ? error.message : 'UNKNOWN',
+        });
+      }
+    </script>
+  </body>
+</html>
