@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PDF Performance Probe</title>
+  </head>
+  <body>
+    <button id="download" type="button">下载 PDF</button>
+    <button id="measure" type="button">测量 10 次</button>
+    <button id="prepare" type="button">预生成</button>
+    <output id="result">idle</output>
+    <script type="module">
+      import { ReportPdfClient, createReportPdfWorker } from '/services/pdf/reportPdfClient.ts';
+      import { buildReportDocumentModel } from '/services/reportDocumentModel.ts';
+      import { recruiterFixture } from '/tests/fixtures/pdfReportFixture.ts';
+
+      const model = buildReportDocumentModel(recruiterFixture);
+      const output = document.querySelector('#result');
+      let sharedClient = null;
+      let sharedPromise = null;
+      let sharedDownloadCount = 0;
+
+      const sharedRuntime = {
+        createWorker: createReportPdfWorker,
+        createObjectURL: (blob) => URL.createObjectURL(blob),
+        revokeObjectURL: (url) => URL.revokeObjectURL(url),
+        triggerDownload: (url, fileName) => {
+          sharedDownloadCount += 1;
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = fileName;
+          anchor.click();
+        },
+        setTimeout: (callback, delayMs = 15_000) => window.setTimeout(callback, delayMs),
+        clearTimeout: (id) => window.clearTimeout(id),
+        randomUUID: () => crypto.randomUUID(),
+      };
+
+      const prepareShared = () => {
+        if (!sharedClient) sharedClient = new ReportPdfClient(sharedRuntime);
+        if (!sharedPromise) sharedPromise = sharedClient.prepare(model);
+        return sharedPromise;
+      };
+
+      const downloadShared = async () => {
+        const startedAt = performance.now();
+        await prepareShared();
+        await sharedClient.download('EvalBar_Performance_Probe.pdf');
+        const elapsedMs = performance.now() - startedAt;
+        output.textContent = JSON.stringify({ status: 'downloaded', elapsedMs, downloadCount: sharedDownloadCount });
+        return elapsedMs;
+      };
+
+      document.querySelector('#download').addEventListener('click', () => {
+        downloadShared().catch((error) => {
+          output.textContent = JSON.stringify({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'UNKNOWN',
+          });
+        });
+      });
+
+      const performanceProbe = {
+        async runPrepareSeries(count) {
+          const runs = [];
+          const longTasks = [];
+          const observer = typeof PerformanceObserver === 'function'
+            && PerformanceObserver.supportedEntryTypes?.includes('longtask')
+            ? new PerformanceObserver((list) => {
+                longTasks.push(...list.getEntries().map((entry) => entry.duration));
+              })
+            : null;
+          observer?.observe({ type: 'longtask', buffered: true });
+          for (let index = 0; index < count; index += 1) {
+            const client = new ReportPdfClient();
+            const heapBefore = performance.memory?.usedJSHeapSize ?? null;
+            const startedAt = performance.now();
+            const blob = await client.prepare(model);
+            const elapsedMs = performance.now() - startedAt;
+            const heapAfter = performance.memory?.usedJSHeapSize ?? null;
+            runs.push({
+              elapsedMs,
+              blobSize: blob.size,
+              heapDelta: heapBefore === null || heapAfter === null ? null : heapAfter - heapBefore,
+            });
+            client.dispose();
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+          observer?.disconnect();
+          return {
+            runs,
+            longTasks,
+            memoryApi: typeof performance.measureUserAgentSpecificMemory === 'function',
+            userAgent: navigator.userAgent,
+            hardwareConcurrency: navigator.hardwareConcurrency,
+            deviceMemory: navigator.deviceMemory ?? null,
+          };
+        },
+        async prepareShared() {
+          const startedAt = performance.now();
+          const blob = await prepareShared();
+          return { elapsedMs: performance.now() - startedAt, blobSize: blob.size };
+        },
+        downloadShared,
+        disposeShared() {
+          sharedClient?.dispose();
+          sharedClient = null;
+          sharedPromise = null;
+          sharedDownloadCount = 0;
+        },
+      };
+      window.pdfPerformanceProbe = performanceProbe;
+
+      document.querySelector('#measure').addEventListener('click', async () => {
+        output.textContent = 'measuring';
+        const result = await performanceProbe.runPrepareSeries(10);
+        output.textContent = JSON.stringify({ status: 'measured', ...result });
+      });
+      document.querySelector('#prepare').addEventListener('click', async () => {
+        output.textContent = 'preparing';
+        const result = await performanceProbe.prepareShared();
+        output.textContent = JSON.stringify({ status: 'ready', ...result });
+      });
+    </script>
+  </body>
+</html>

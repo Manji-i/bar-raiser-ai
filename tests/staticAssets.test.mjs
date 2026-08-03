@@ -86,3 +86,9 @@ test('PDF 导出不再依赖截图或系统打印', () => {
   assert.doesNotMatch(reportView, /html2pdf|html2canvas|data-html2canvas-ignore|window\.print/);
   assert.match(reportView, /usePreparedReportPdf/);
 });
+
+test('PDF 引擎只通过 Worker 懒加载', () => {
+  assert.doesNotMatch(indexHtml, /pdfmake|NotoSansSC/);
+  assert.match(reportView, /usePreparedReportPdf/);
+  assert.doesNotMatch(reportView, /from ['"]pdfmake/);
+});
