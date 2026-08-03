@@ -14,7 +14,7 @@ Eval Bar AI 是一个面向面试记录分析的双模式工具：招聘方可�
 - **简历解析兜底**：简历支持 PDF、DOCX、TXT，最大 10 MB；解析质量较低时可人工修订文本，低质量原文不会直接进入 AI 输入。
 - **多模型支持**：通过 `AI_PROVIDER` 在 `gemini` 和 `doubao` 之间切换。
 - **登录与权限**：支持用户名密码注册和登录；普通用户只能访问自己的报告，管理员可查看全量报告和反馈。
-- **报告管理**：支持查看历史报告、复制分享链接、删除报告，并导出 Markdown 或 PDF。
+- **报告管理**：支持查看历史报告、复制分享链接、删除报告，并导出 Markdown 或可搜索文字型 PDF；PDF 在浏览器后台预生成，点击后直接下载。
 - **反馈闭环**：用户可对报告评分并提交问题反馈；管理员可查看反馈并用于 Prompt 迭代。
 - **服务端密钥管理**：AI Key 只在服务端读取，不暴露给浏览器端代码。
 
@@ -78,7 +78,7 @@ npm run build
 npm start
 ```
 
-`npm run build` 会将前端构建到 `dist/`，`npm start` 会启动 Express 服务并托管静态资源与 API。
+`npm run build` 会将前端构建到 `dist/`，`npm start` 会启动 Express 服务并托管静态资源与 API。当前 1.9 GB、无 swap 的生产主机不执行 Vite 构建，实际发布必须按 [DEPLOYMENT.md](DEPLOYMENT.md) 在本地或 CI 构建并上传 `dist/`。
 
 ### Docker 部署
 
@@ -104,9 +104,11 @@ docker run -p 3000:3000 \
 ├── components/              # 业务页面和可复用组件
 ├── src/context/             # 认证状态等 React Context
 ├── services/*.ts            # 前端 API 调用和浏览器侧工具
+├── services/pdf/            # 文字型 PDF 构建、Worker、Blob 缓存与下载
 ├── services/*.js            # 后端服务模块（含 db.js：SQLite 连接与建表）
 ├── scripts/                 # 开发启动和一次性数据迁移脚本
 ├── server.js                # Express 入口和 API 路由
+├── public/                  # 字体、favicon 等随构建复制的静态资产
 ├── data/                    # 本地运行时数据（app.db 等），不应提交真实内容
 ├── dist/                    # 前端构建产物
 └── Dockerfile               # 容器构建配置

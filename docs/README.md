@@ -9,5 +9,6 @@
 - `未来需迭代内容.md`：认证、角色隔离和基础设施风险登记。
 - `docs/superpowers/specs/`：已确认的功能设计规格，文件名使用 `YYYY-MM-DD-<topic>-design.md`。
 - `docs/superpowers/plans/`：规格确认后的实施计划，文件名使用 `YYYY-MM-DD-<topic>-plan.md`。
+- `docs/superpowers/verification/`：功能完成后的可复核证据，文件名使用 `YYYY-MM-DD-<topic>.md`；不得写入候选人真实材料、token 或密钥。
 
 工具生成的临时交互预览位于 `.superpowers/brainstorm/`，只用于设计过程，不作为长期事实来源；当前产品事实以 `architecture.md`、`integration-guide.md`、`operator-runbook.md` 和 `handoff.md` 为准。

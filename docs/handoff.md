@@ -2,14 +2,14 @@
 
 ## 当前部署检查点
 
-截至 2026-08-03，本地 `main`、GitHub `origin/main` 与生产服务器均为提交 `d97c450`（`docs: record text PDF production deployment`）；文字型 PDF 功能的首个生产代码提交为 `109cb7e`。服务器直连 GitHub 不稳定，本次继续通过 Bundle 路径快进同步。
+截至 2026-08-03 本次文档同步前，GitHub `origin/main` 为提交 `6e81b57`（`docs: document PDF export server footprint`），生产服务器代码为 `d97c450`（`docs: record text PDF production deployment`）；两者都包含首个文字型 PDF 生产代码提交 `109cb7e`。`6e81b57` 只更新文档，未再次部署，不影响线上功能版本。本次 `neat-freak` 同步产生的提交先保留在本地，推送或部署后再更新远端检查点。服务器直连 GitHub 不稳定，代码发布继续使用 Bundle 路径。
 
 - 线上地址：`http://14.103.45.4:3000/`
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
 - 当前首页资源：`/assets/index-BYxbUDod.js`
-- 最近完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260803-162514`
-- 最近静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260803-163237`
+- 2026-08-03 完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260803-162514`
+- 2026-08-03 静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260803-163237`
 - 分支与 worktree：仅保留 `main`；已完成的功能分支和对应 worktree 已删除
 
 合并后的 `main` 在本地完成 55 项自动化测试、生产构建和 12 页 PDF 校验；生产服务器完成 `npm ci` 和 55 项测试。服务器因 1.9 GB 内存且无 swap，不再承担本次 Vite 构建，改为发布本地已验证的 `dist/`。发布后 PM2 为 `online`，首页返回 `200`，未认证报告接口返回 `401`，主资源、PDF Worker 和两份字体均返回 `200`。
@@ -56,9 +56,9 @@
 ## 当前技术债
 
 - `npm audit` 仍报告 2 个 high，均来自 React Router 的 RSC Action CSRF 公告 `GHSA-qwww-vcr4-c8h2`；当前应用使用 `BrowserRouter`，未使用 RSC API，因此现有架构不受该攻击路径影响。继续按风险登记跟踪，不运行破坏性的自动修复。
-- Tailwind 和 Google Fonts 仍依赖第三方 CDN；PDF 导出已移除 `html2pdf` CDN，PDF Worker 与 Noto Sans SC 字体已自托管；尚未建立严格 CSP。
+- Tailwind 和网页 Inter 字体仍依赖第三方 CDN；PDF 导出已移除 `html2pdf` CDN，PDF Worker 与 Noto Sans SC 字体已自托管；尚未建立严格 CSP，静态资源也尚未配置长期缓存。
 - Vite 构建仍提示主 bundle 超过默认 500 kB；Tailwind CDN 和错误设置 `NODE_ENV=production` 也会产生已知提示。
-- 生产服务器只有 1.9 GB 内存且没有 swap，直接执行 Vite 构建会耗尽资源；后续发布应优先在本地或 CI 完成构建并上传已验证的 `dist/`，或先扩容/增加 swap。
+- 生产服务器只有 1.9 GB 内存且没有 swap，直接执行 Vite 构建会耗尽资源；后续发布必须在本地或 CI 完成构建并上传已验证的 `dist/`。只有扩容或增加 swap 并重新验证后，才可调整该规则。
 - 简历首版没有 OCR、病毒扫描或自动重解析。
 
 ## 下一步优先级

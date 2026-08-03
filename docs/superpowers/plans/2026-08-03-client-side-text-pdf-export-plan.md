@@ -8,6 +8,8 @@
 
 **Tech Stack:** React 19、TypeScript、Vite 6 Web Worker、`pdfmake 0.3.11`、`@types/pdfmake 0.3.3`、Noto Sans SC Subset OTF、Node Test Runner、`pdfjs-dist`、Poppler
 
+**执行状态（2026-08-03）：** Task 1–8 已完成、合并并部署生产；下方未勾选项保留为历史执行顺序，不代表当前未完成。最终事实与验证数据以 [`../verification/2026-08-03-client-side-text-pdf-export.md`](../verification/2026-08-03-client-side-text-pdf-export.md) 和 [`../../handoff.md`](../../handoff.md) 为准。
+
 ---
 
 ## 任务清单

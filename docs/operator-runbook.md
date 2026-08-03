@@ -28,8 +28,9 @@ npm run build
 
 - 部署来源是明确的本地 `main` 提交。
 - 没有把 `.env*`、`data/`、候选人材料或原型文件纳入提交。
-- 当前 37 个自动化测试全部通过；新增测试后以实际总数为准。
+- 当前 55 个自动化测试全部通过；新增测试后以实际总数为准。
 - 生产构建成功。Tailwind CDN、大 chunk 和 Vite 对 `.env` 中 `NODE_ENV=production` 的提示是当前已知警告，不等于构建失败；不要在 `.env` 中设置该值。
+- 构建在本地或 CI 完成并生成待发布的 `dist/`；1.9 GB、无 swap 的生产主机不得执行 `npm run build`。
 
 ## 3. 数据备份
 
@@ -57,7 +58,7 @@ git status -sb
 pm2 status bar-raiser-ai
 ```
 
-PM2 必须为 `online`。服务器可能因本地 Bundle 尚未推 GitHub而显示 `main...origin/main [ahead N]`；这不是脏工作区，必须根据 GitHub 真实状态解释。
+PM2 必须为 `online`。服务器可能因本地 Bundle 尚未推 GitHub 而显示 `main...origin/main [ahead N]`；这不是脏工作区，必须根据 GitHub 真实状态解释。
 
 ### 4.2 HTTP 与静态资源
 
@@ -65,23 +66,28 @@ PM2 必须为 `online`。服务器可能因本地 Bundle 尚未推 GitHub而显�
 curl -sS -o /dev/null -w 'home=%{http_code}\n' http://127.0.0.1:3000/
 curl -sS -o /dev/null -w 'auth=%{http_code}\n' 'http://127.0.0.1:3000/api/reports?analysisMode=candidate'
 curl -sS -L http://127.0.0.1:3000/ | grep -o '/assets/index-[A-Za-z0-9_-]*\.js'
+pdf_worker_path="$(find dist/assets -maxdepth 1 -name 'reportPdf.worker-*.js' -print -quit | sed 's#^dist##')"
+test -n "$pdf_worker_path"
+curl -sS -o /dev/null -w 'pdf_worker=%{http_code}\n' "http://127.0.0.1:3000$pdf_worker_path"
+curl -sS -o /dev/null -w 'font_regular=%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Regular-v1.otf
+curl -sS -o /dev/null -w 'font_bold=%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Bold-v1.otf
 ```
 
-预期：首页 `200`，未认证报告接口 `401`，HTML 指向本次构建的新 asset。
+预期：首页、PDF Worker 和两份字体均为 `200`，未认证报告接口为 `401`，HTML 指向本次构建的新 asset。
 
 ### 4.3 数据结构
 
 只检查表名和列名，不展开报告、用户或附件内容：
 
 ```bash
-node --input-type=module -e '
+node --input-type=module <<'NODE'
 import { db } from "./services/db.js";
-const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = '\''table'\'' AND name IN ('\''candidate_system_prompt'\', '\''report_attachments'\') ORDER BY name").all();
+const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('candidate_system_prompt', 'report_attachments') ORDER BY name").all();
 const columns = db.prepare("PRAGMA table_info(reports)").all()
   .map((row) => row.name)
   .filter((name) => ["analysis_mode", "job_description", "resume_text"].includes(name));
 console.log(JSON.stringify({ tables: tables.map((row) => row.name), columns }));
-'
+NODE
 ```
 
 预期存在两张新表和三个 reports 新列。
@@ -118,9 +124,13 @@ pm2 logs bar-raiser-ai --lines 50 --nostream
 依次检查：
 
 1. 服务器 `HEAD` 是否为目标提交。
-2. `npm run build` 是否成功。
-3. HTML 中的 asset hash 是否变化。
+2. 本地或 CI 的 `npm run build` 是否成功，上传压缩包的 SHA-256 是否一致。
+3. 服务器 `dist/` 是否已原子替换，HTML 中的 asset hash 是否变化。
 4. PM2 是否重启并指向当前目录。
+
+### 生产机误启动构建后资源耗尽
+
+不要在生产机重试构建。只终止本次发布启动的构建进程，确认原 PM2 服务仍可返回首页 `200`，然后按 [DEPLOYMENT.md](../DEPLOYMENT.md) 上传本地已验证的 `dist/`。如果 SSH 或 HTTP 尚未恢复，等待资源释放后再做只读检查，不重启整台服务器。
 
 ### Candidate 接口返回 400
 

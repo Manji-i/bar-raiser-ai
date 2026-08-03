@@ -10,7 +10,51 @@
 
 线上服务器访问 GitHub 不稳定。若 `git fetch` 或 `git pull` 卡住，使用下方“Bundle 部署路径”。
 
-## 标准部署路径
+生产服务器只有 1.9 GB 内存且没有 swap。不要在该主机执行 `npm run build`；所有生产发布都先在本地或 CI 完成测试与构建，再上传并原子替换 `dist/`。
+
+## 1. 本地准备发布包
+
+无论代码使用 GitHub 还是 Bundle 同步，都先在本地完成：
+
+```bash
+git fetch origin
+git status -sb
+git log --oneline --left-right main...origin/main
+npm ci
+npm test
+npm run build
+
+deploy_artifact_dir="$(mktemp -d)"
+COPYFILE_DISABLE=1 tar -C dist -czf "$deploy_artifact_dir/bar-raiser-ai-dist.tgz" .
+git bundle create "$deploy_artifact_dir/bar-raiser-ai-main.bundle" main
+git bundle verify "$deploy_artifact_dir/bar-raiser-ai-main.bundle"
+shasum -a 256 "$deploy_artifact_dir/bar-raiser-ai-dist.tgz" \
+  "$deploy_artifact_dir/bar-raiser-ai-main.bundle"
+```
+
+保存终端输出中的两个 SHA-256。发布包不得包含 `.env*` 或 `data/`。
+
+上传静态资源包：
+
+```bash
+scp -O "$deploy_artifact_dir/bar-raiser-ai-dist.tgz" \
+  root@14.103.45.4:/tmp/bar-raiser-ai-dist.tgz
+```
+
+若大文件传输连接被关闭，切成 1 MiB 分片逐个传输，服务器重组后再校验 SHA-256：
+
+```bash
+split -b 1m "$deploy_artifact_dir/bar-raiser-ai-dist.tgz" \
+  "$deploy_artifact_dir/bar-raiser-ai-dist.part-"
+for chunk in "$deploy_artifact_dir"/bar-raiser-ai-dist.part-*; do
+  scp -O "$chunk" root@14.103.45.4:/tmp/ || exit 1
+done
+ssh root@14.103.45.4 'cat /tmp/bar-raiser-ai-dist.part-* > /tmp/bar-raiser-ai-dist.tgz'
+```
+
+## 2. 同步代码
+
+### 标准 GitHub 路径
 
 适用于服务器能正常访问 GitHub 的情况：
 
@@ -26,34 +70,21 @@ git fetch origin
 git pull --ff-only origin main
 npm ci
 npm test
-npm run build
-pm2 restart bar-raiser-ai --update-env
-pm2 save
 ```
 
-验证：
-
-```bash
-pm2 status bar-raiser-ai
-curl -sS -I http://127.0.0.1:3000/
-```
-
-## Bundle 部署路径
+### Bundle 路径
 
 适用于服务器拉 GitHub 失败、卡住，或本地 `main` 已确认但尚未推送 GitHub 的情况。先确认本地 `main` 是本次要部署的唯一来源：
 
 ```bash
-git status -sb
-git rev-parse --short main
-git log --oneline --left-right main...origin/main
-git bundle create /private/tmp/bar-raiser-ai-main.bundle main
-git bundle verify /private/tmp/bar-raiser-ai-main.bundle
-scp /private/tmp/bar-raiser-ai-main.bundle root@14.103.45.4:/tmp/bar-raiser-ai-main.bundle
+scp -O "$deploy_artifact_dir/bar-raiser-ai-main.bundle" \
+  root@14.103.45.4:/tmp/bar-raiser-ai-main.bundle
 ```
 
-服务器合并前先备份 SQLite。简历源文件已经存在时，备份必须同时覆盖整个 `data/`；下面用受限目录保存完整数据副本：
+服务器合并前先备份完整 `data/`，再快进代码：
 
 ```bash
+ssh root@14.103.45.4
 cd /root/bar-raiser-ai-new/bar-raiser-ai
 umask 077
 mkdir -p /root/bar-raiser-ai-backups
@@ -65,23 +96,50 @@ git fetch /tmp/bar-raiser-ai-main.bundle main
 git merge --ff-only FETCH_HEAD
 npm ci
 npm test
-npm run build
-pm2 restart bar-raiser-ai --update-env
-pm2 save
 ```
 
 只有 GitHub 的 `origin/main` 已经真实推送到同一个提交时，才能更新服务器的 `refs/remotes/origin/main`。如果 Bundle 来自尚未推送的本地 `main`，服务器显示 `main...origin/main [ahead N]` 是正确状态，不要伪造远端引用。
 
-验证线上资源是否更新：
+## 3. 校验并切换静态资源
+
+先把本地记录的 `dist` SHA-256 与服务器输出逐字比较，再解压到唯一暂存目录：
+
+```bash
+sha256sum /tmp/bar-raiser-ai-dist.tgz
+
+cd /root/bar-raiser-ai-new/bar-raiser-ai
+deploy_stamp="$(date +%Y%m%d-%H%M%S)"
+dist_stage="/root/bar-raiser-ai-new/dist-stage-$deploy_stamp"
+dist_backup="/root/bar-raiser-ai-backups/dist-before-$deploy_stamp"
+mkdir -p "$dist_stage"
+tar -xzf /tmp/bar-raiser-ai-dist.tgz -C "$dist_stage"
+test -f "$dist_stage/index.html"
+test -n "$(find "$dist_stage/assets" -maxdepth 1 -name 'index-*.js' -print -quit)"
+test -n "$(find "$dist_stage/assets" -maxdepth 1 -name 'reportPdf.worker-*.js' -print -quit)"
+test -f "$dist_stage/fonts/NotoSansSC-Regular-v1.otf"
+test -f "$dist_stage/fonts/NotoSansSC-Bold-v1.otf"
+mv dist "$dist_backup"
+mv "$dist_stage" dist
+pm2 restart bar-raiser-ai --update-env
+pm2 save
+```
+
+`mv dist "$dist_backup"` 之后如果新目录切换失败，不要启动缺少 `dist/` 的服务；立即把 `$dist_backup` 恢复为 `dist`，再调查发布包。
+
+## 4. 发布验证
 
 ```bash
 pm2 status bar-raiser-ai
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/
 curl -sS -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:3000/api/reports?analysisMode=candidate'
 curl -sS -L http://14.103.45.4:3000/ | grep -o '/assets/index-[A-Za-z0-9_-]*\.js'
+pdf_worker_path="$(find dist/assets -maxdepth 1 -name 'reportPdf.worker-*.js' -print -quit | sed 's#^dist##')"
+curl -sS -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:3000$pdf_worker_path"
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Regular-v1.otf
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Bold-v1.otf
 ```
 
-预期首页为 `200`，未认证报告接口为 `401`，PM2 为 `online`。数据库结构检查和更完整的冒烟步骤见 `docs/operator-runbook.md`。
+预期首页、PDF Worker 和字体为 `200`，未认证报告接口为 `401`，PM2 为 `online`。同时记录服务器 `HEAD` 与 HTML 中的主 asset hash。数据库结构检查和更完整的冒烟步骤见 `docs/operator-runbook.md`。
 
 ## Docker 部署
 
@@ -101,7 +159,7 @@ Dockerfile 会复制 `server.js`、`services/` 和 `dist/`，并创建可写的 
 
 候选人模式会把简历源文件写入 `/app/data/uploads/resumes/`。容器部署必须继续持久化整个 `/app/data`，不能只单独挂载 `app.db`。
 
-## 直接部署
+## 其他主机直接部署
 
 ```bash
 npm ci
@@ -116,6 +174,8 @@ npm start
 pm2 start npm --name bar-raiser-ai -- start
 pm2 save
 ```
+
+以上直接部署只适用于内存充足并已验证可执行 Vite 构建的其他主机，不适用于当前 1.9 GB 生产服务器。
 
 ## 环境配置
 
@@ -175,6 +235,12 @@ pm2 restart bar-raiser-ai --update-env
 1. 用 `ps -eo pid,ppid,etime,cmd | grep 'git fetch'` 确认卡住进程。
 2. 终止本次部署启动的卡住进程。
 3. 改用 Bundle 部署路径。
+
+### 生产机误执行构建导致资源耗尽
+
+1. 不要重复运行 `npm run build`。
+2. 只终止本次发布启动的构建进程，确认 PM2 原服务和首页仍可用。
+3. 回到本地完成 `npm test` 与 `npm run build`，按本文上传并原子替换 `dist/`。
 
 ### AI 服务问题
 
