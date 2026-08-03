@@ -29,7 +29,7 @@ const createPdfClientHarness = () => {
     createObjectURL: () => 'blob:test',
     revokeObjectURL: (url) => revokedUrls.push(url),
     triggerDownload: (_url, fileName) => downloads.push(fileName),
-    setTimeout: (callback) => globalThis.setTimeout(callback, 15_000),
+    setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs ?? 15_000),
     clearTimeout: (id) => globalThis.clearTimeout(id),
     randomUUID: () => 'request-1',
   };
@@ -53,7 +53,10 @@ test('prepare 复用任务，download 复用 Blob，dispose 释放 URL', async (
   assert.equal(first, second);
   assert.equal(harness.postCount, 1);
   harness.succeed(new Blob(['%PDF-test'], { type: 'application/pdf' }));
-  await client.download('EvalBar_Report_2026-08-03.pdf');
+  const firstDownload = client.download('EvalBar_Report_2026-08-03.pdf');
+  const secondDownload = client.download('EvalBar_Report_2026-08-03.pdf');
+  assert.equal(firstDownload, secondDownload);
+  await firstDownload;
   assert.equal(client.getStatus(), 'ready');
   assert.deepEqual(harness.downloads, ['EvalBar_Report_2026-08-03.pdf']);
   client.dispose();

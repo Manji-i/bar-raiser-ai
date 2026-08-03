@@ -15,7 +15,7 @@ export interface PdfClientRuntime {
   createObjectURL(blob: Blob): string;
   revokeObjectURL(url: string): void;
   triggerDownload(url: string, fileName: string): void;
-  setTimeout(callback: () => void): ReturnType<typeof setTimeout>;
+  setTimeout(callback: () => void, delayMs?: number): ReturnType<typeof setTimeout>;
   clearTimeout(id: ReturnType<typeof setTimeout>): void;
   randomUUID(): string;
 }
@@ -38,7 +38,7 @@ const browserPdfRuntime: PdfClientRuntime = {
     anchor.click();
     anchor.remove();
   },
-  setTimeout: (callback) => window.setTimeout(callback, 15_000),
+  setTimeout: (callback, delayMs = 15_000) => window.setTimeout(callback, delayMs),
   clearTimeout: (id) => window.clearTimeout(id),
   randomUUID: () => crypto.randomUUID(),
 };
@@ -53,6 +53,8 @@ export class ReportPdfClient {
   private rejectPrepare: ((error: Error) => void) | null = null;
   private blob: Blob | null = null;
   private objectUrl: string | null = null;
+  private downloadPromise: Promise<void> | null = null;
+  private downloadCooldown: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
   constructor(runtime: PdfClientRuntime = browserPdfRuntime) {
@@ -88,7 +90,7 @@ export class ReportPdfClient {
         reject(new Error(code));
       };
 
-      this.timeout = this.runtime.setTimeout(() => fail('WORKER_TIMEOUT'));
+      this.timeout = this.runtime.setTimeout(() => fail('WORKER_TIMEOUT'), 15_000);
       worker.onerror = () => fail('PDF_BUILD_FAILED');
       worker.onmessage = ({ data }) => {
         if (!isPdfWorkerResponse(data) || data.requestId !== requestId) return;
@@ -108,12 +110,24 @@ export class ReportPdfClient {
     return this.preparePromise;
   }
 
-  async download(fileName: string): Promise<void> {
-    if (!this.preparePromise && !this.blob) throw new Error('PDF_NOT_PREPARED');
-    const blob = this.blob ?? await this.preparePromise;
-    if (!blob) throw new Error('PDF_NOT_PREPARED');
-    if (!this.objectUrl) this.objectUrl = this.runtime.createObjectURL(blob);
-    this.runtime.triggerDownload(this.objectUrl, fileName);
+  download(fileName: string): Promise<void> {
+    if (this.downloadPromise) return this.downloadPromise;
+    const task = (async () => {
+      if (!this.preparePromise && !this.blob) throw new Error('PDF_NOT_PREPARED');
+      const blob = this.blob ?? await this.preparePromise;
+      if (!blob) throw new Error('PDF_NOT_PREPARED');
+      if (!this.objectUrl) this.objectUrl = this.runtime.createObjectURL(blob);
+      this.runtime.triggerDownload(this.objectUrl, fileName);
+    })();
+    this.downloadPromise = task;
+    const release = () => {
+      this.downloadCooldown = this.runtime.setTimeout(() => {
+        if (this.downloadPromise === task) this.downloadPromise = null;
+        this.downloadCooldown = null;
+      }, 250);
+    };
+    task.then(release, release);
+    return task;
   }
 
   dispose(): void {
@@ -124,6 +138,9 @@ export class ReportPdfClient {
     this.rejectPrepare = null;
     if (reject) reject(new Error('PDF_CLIENT_DISPOSED'));
     if (this.objectUrl) this.runtime.revokeObjectURL(this.objectUrl);
+    if (this.downloadCooldown !== null) this.runtime.clearTimeout(this.downloadCooldown);
+    this.downloadCooldown = null;
+    this.downloadPromise = null;
     this.objectUrl = null;
     this.blob = null;
     this.preparePromise = null;

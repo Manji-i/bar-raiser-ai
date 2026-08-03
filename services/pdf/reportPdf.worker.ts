@@ -9,6 +9,10 @@ const FONT_URLS = {
   normal: new URL('/fonts/NotoSansSC-Regular-v1.otf', self.location.origin).href,
   bold: new URL('/fonts/NotoSansSC-Bold-v1.otf', self.location.origin).href,
 };
+const FONT_FILES = {
+  normal: 'NotoSansSC-Regular-v1.otf',
+  bold: 'NotoSansSC-Bold-v1.otf',
+};
 
 let fontsReady: Promise<void> | null = null;
 
@@ -17,14 +21,18 @@ const ensureFonts = () => {
     fontsReady = Promise.all(Object.values(FONT_URLS).map(async (url) => {
       const response = await fetch(url);
       if (!response.ok) throw new Error('FONT_LOAD_FAILED');
-      await response.arrayBuffer();
-    })).then(() => {
+      return response.arrayBuffer();
+    })).then(([normal, bold]) => {
+      pdfMake.addVirtualFileSystem({
+        [FONT_FILES.normal]: { data: new Uint8Array(normal), encoding: 'binary' },
+        [FONT_FILES.bold]: { data: new Uint8Array(bold), encoding: 'binary' },
+      });
       pdfMake.addFonts({
         NotoSansSC: {
-          normal: FONT_URLS.normal,
-          bold: FONT_URLS.bold,
-          italics: FONT_URLS.normal,
-          bolditalics: FONT_URLS.bold,
+          normal: FONT_FILES.normal,
+          bold: FONT_FILES.bold,
+          italics: FONT_FILES.normal,
+          bolditalics: FONT_FILES.bold,
         },
       });
     });

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const pdfWorkerProtocol: any = await import('../services/pdf/reportPdfProtocol.ts').catch(() => ({}));
@@ -27,4 +28,15 @@ test('PDF Worker 协议区分 probe、成功和安全错误', () => {
 test('PDF Worker 客户端提供可复用的探针入口', () => {
   assert.equal(typeof pdfWorkerClient.createReportPdfWorker, 'function');
   assert.equal(typeof pdfWorkerClient.probeReportPdfWorker, 'function');
+});
+
+test('PDF Worker 将首次下载的字体直接写入内存文件系统', () => {
+  const workerSource = readFileSync(
+    new URL('../services/pdf/reportPdf.worker.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(workerSource, /addVirtualFileSystem/);
+  assert.match(workerSource, /new Uint8Array\(normal\)/);
+  assert.match(workerSource, /normal:\s*FONT_FILES\.normal/);
+  assert.doesNotMatch(workerSource, /normal:\s*FONT_URLS\.normal/);
 });
