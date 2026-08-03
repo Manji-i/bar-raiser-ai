@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Download, RefreshCw, CheckCircle2, FileDown, Share2, Trash2, Star,
@@ -8,11 +8,11 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnalysisMode, AnalysisState, Report } from '../types';
 import { modePath, reportMatchesAuthMode } from '../services/analysisMode';
-import { withPdfExportLayout } from '../services/pdfExport';
 import {
   buildReportDocumentModel,
   type CandidateReportData,
 } from '../services/reportDocumentModel';
+import { usePreparedReportPdf } from '../services/pdf/usePreparedReportPdf';
 
 // 辅助函数：获取带认证的请求头
 const getAuthHeaders = () => {
@@ -25,9 +25,6 @@ const getAuthHeaders = () => {
   }
   return headers;
 };
-
-// Declare html2pdf for TypeScript since it's loaded via CDN
-declare var html2pdf: any;
 
 interface ReportViewProps {
   authMode: AnalysisMode;
@@ -206,7 +203,6 @@ const markdownComponents = {
 const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnalysis, onReset }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const contentRef = useRef<HTMLDivElement>(null);
   const initialAnalysisMatches = !initialAnalysis
     || reportMatchesAuthMode(initialAnalysis.analysisMode, authMode);
 
@@ -214,7 +210,6 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     initialAnalysisMatches ? initialAnalysis ?? null : null,
   );
   const [createdAt, setCreatedAt] = useState<string | null>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isLoading, setIsLoading] = useState(!initialAnalysis || !initialAnalysisMatches);
   const [copyingLink, setCopyingLink] = useState(false);
   const [feedback, setFeedback] = useState({
@@ -307,6 +302,7 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     reportMode,
   ]);
   const { sections, dimensions, candidate: candidateData } = reportDocument;
+  const preparedPdf = usePreparedReportPdf(reportDocument);
 
   // Track the currently visible section for TOC highlighting
   useEffect(() => {
@@ -357,35 +353,10 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
   };
 
   const handleDownloadPdf = async () => {
-    if (!contentRef.current) return;
-    setIsGeneratingPdf(true);
-
-    // Expand all sections so the PDF captures the full report, then restore
-    const prevCollapsed = collapsed;
-    setCollapsed({});
-    // Wait two frames so React commits the expanded layout before capture
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-    const element = contentRef.current;
-    const opt = {
-      margin: [10, 10, 10, 10], // top, left, bottom, right
-      filename: `EvalBar_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-
     try {
-      await withPdfExportLayout(element, async () => {
-        await html2pdf().set(opt).from(element).save();
-      });
-    } catch (e) {
-      console.error("PDF Generation failed", e);
-      alert("PDF 生成失败，您可以尝试打印本页面。");
-    } finally {
-      setCollapsed(prevCollapsed);
-      setIsGeneratingPdf(false);
+      await preparedPdf.download(`EvalBar_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch {
+      window.alert('PDF 生成失败，请重试。');
     }
   };
 
@@ -513,8 +484,8 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     <div className="w-full pb-20">
 
       <div className="xl:flex xl:items-start xl:gap-6">
-        {/* Main column, captured for PDF. Toolbar/chips are ignored via data-html2canvas-ignore. */}
-        <div ref={contentRef} className="flex-1 min-w-0">
+        {/* Main report column */}
+        <div className="flex-1 min-w-0">
 
           {/* Report Hero */}
           <div className="bg-gradient-to-r from-indigo-500 to-violet-500 rounded-2xl shadow-lg shadow-indigo-500/20 p-6 md:p-8 text-white mb-4">
@@ -566,8 +537,8 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
             </div>
           </div>
 
-          {/* Action toolbar (excluded from PDF) */}
-          <div className="flex flex-wrap items-center gap-3 mb-6" data-html2canvas-ignore="true">
+          {/* Action toolbar */}
+          <div className="flex flex-wrap items-center gap-3 mb-6">
             <button
               onClick={onReset ? onReset : () => navigate(modePath(authMode, 'app'))}
               className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
@@ -595,11 +566,11 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
             </button>
             <button
               onClick={handleDownloadPdf}
-              disabled={isGeneratingPdf}
+              disabled={preparedPdf.isDownloading}
               className="flex items-center gap-2 px-4 py-2 text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-70 disabled:cursor-wait"
             >
               <Download className="w-4 h-4" />
-              {isGeneratingPdf ? '生成中…' : '导出 PDF'}
+              {preparedPdf.isDownloading ? '生成中…' : '导出 PDF'}
             </button>
 
             {isCandidate && analysis.resumeFileName && (analysis.reportId || id) && (
@@ -662,9 +633,9 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
             </div>
           )}
 
-          {/* Section chips below xl (excluded from PDF) */}
+          {/* Section chips below xl */}
           {sections.length > 0 && (
-            <div className="xl:hidden mb-4 -mx-1 px-1 flex gap-2 overflow-x-auto pb-2" data-html2canvas-ignore="true">
+            <div className="xl:hidden mb-4 -mx-1 px-1 flex gap-2 overflow-x-auto pb-2">
               {sections.map((s) => (
                 <button
                   key={s.id}
@@ -687,8 +658,8 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
             <CandidateReportBody data={candidateData} />
           ) : sections.length > 0 ? (
             <div className="space-y-4">
-              {/* Expand / collapse controls (excluded from PDF) */}
-              <div className="flex justify-end gap-2" data-html2canvas-ignore="true">
+              {/* Expand / collapse controls */}
+              <div className="flex justify-end gap-2">
                 <button
                   onClick={expandAll}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"

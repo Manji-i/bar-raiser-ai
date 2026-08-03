@@ -24,6 +24,10 @@ const candidateUpload = readFileSync(
   new URL('../components/CandidateFileUpload.tsx', import.meta.url),
   'utf8',
 );
+const reportView = readFileSync(
+  new URL('../components/ReportView.tsx', import.meta.url),
+  'utf8',
+);
 
 test('页面入口不引用不存在的 index.css', () => {
   assert.doesNotMatch(indexHtml, /href=["']\/index\.css["']/);
@@ -75,4 +79,10 @@ test('Candidate 岗位与 JD 输入区域保持等高', () => {
 
   assert.match(fieldSource('candidate-job-title'), /className="[^"]*h-28[^"]*resize-none/);
   assert.match(fieldSource('candidate-job-description'), /className="[^"]*h-28[^"]*resize-none/);
+});
+
+test('PDF 导出不再依赖截图或系统打印', () => {
+  assert.doesNotMatch(indexHtml, /html2pdf(?:\.bundle)?(?:\.min)?\.js/);
+  assert.doesNotMatch(reportView, /html2pdf|html2canvas|data-html2canvas-ignore|window\.print/);
+  assert.match(reportView, /usePreparedReportPdf/);
 });
