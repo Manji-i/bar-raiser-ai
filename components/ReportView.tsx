@@ -9,6 +9,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AnalysisMode, AnalysisState, Report } from '../types';
 import { modePath, reportMatchesAuthMode } from '../services/analysisMode';
 import { withPdfExportLayout } from '../services/pdfExport';
+import {
+  buildReportDocumentModel,
+  type CandidateReportData,
+} from '../services/reportDocumentModel';
 
 // 辅助函数：获取带认证的请求头
 const getAuthHeaders = () => {
@@ -33,17 +37,6 @@ interface ReportViewProps {
 
 const MODE_MISMATCH_NOTICE = '该报告不属于当前登录角色，请退出后重新选择角色。';
 
-interface ReportSection {
-  id: string;
-  title: string;
-  body: string;
-}
-
-interface DimensionScore {
-  name: string;
-  score: string;
-}
-
 // Rating scale, low to high
 const RATING_ORDER = ['NH', 'H-', 'H', 'H+', 'MH'];
 
@@ -52,176 +45,6 @@ const resumeStatusLabels: Record<string, string> = {
   low_quality: '简历解析质量较低',
   empty: '简历未识别到正文',
   manual: '简历文本已人工确认',
-};
-
-// Extract overall fit score from the report text
-const getOverallScore = (text: string) => {
-  // Expected format: "**匹配结论**: H+" (bold markers may wrap label and/or value)
-  const match = text.match(/(?:综合建议|匹配结论)\**\s*[：:]\s*\**\s*(MH|NH|H\+|H-|H)(?![+\-A-Za-z])/);
-  return match ? match[1] : 'N/A';
-};
-
-// Split report markdown into sections by "## " headings; tolerant of missing structure
-const splitSections = (markdown: string): ReportSection[] => {
-  if (!markdown) return [];
-  const parts = markdown.split(/^## /m);
-  // parts[0] is the preamble before the first h2 (usually empty)
-  const sections: ReportSection[] = [];
-  for (let i = 1; i < parts.length; i++) {
-    const chunk = parts[i];
-    const newlineIdx = chunk.indexOf('\n');
-    const title = (newlineIdx === -1 ? chunk : chunk.slice(0, newlineIdx)).trim();
-    const body = newlineIdx === -1 ? '' : chunk.slice(newlineIdx + 1);
-    if (title) {
-      sections.push({ id: `report-section-${i}`, title, body });
-    }
-  }
-  return sections;
-};
-
-// Extract per-dimension scores from section 3 of the report
-const parseDimensions = (markdown: string): DimensionScore[] => {
-  if (!markdown) return [];
-  const parts = markdown.split(/^## /m);
-  const section3 = parts.find((p) => /^3[.、\s]/.test(p.trim()));
-  if (!section3) return [];
-
-  const dims: DimensionScore[] = [];
-  const blocks = section3.split(/^### /m);
-  for (let i = 1; i < blocks.length; i++) {
-    const block = blocks[i];
-    const newlineIdx = block.indexOf('\n');
-    const name = (newlineIdx === -1 ? block : block.slice(0, newlineIdx)).trim();
-    // Note: H+ / H- must be matched before H; the trailing lookahead (not \b) keeps
-    // "H+" / "H-" from degrading to "H" (\b fails after non-word chars like "+")
-    const scoreMatch = block.match(/\*\*评分\*\*\s*[:：]\s*\**\s*(NH|MH|H\+|H-|H)(?![+\-A-Za-z])/);
-    if (name && scoreMatch) {
-      dims.push({ name, score: scoreMatch[1] });
-    }
-  }
-  return dims;
-};
-
-// ---------- Candidate report structured parsing ----------
-
-interface CandidateConclusionItem {
-  label: string;
-  text: string;
-}
-
-interface CandidateStrength {
-  title: string;
-  evidence: string;
-}
-
-interface CandidateProblemField {
-  label: string;
-  text: string;
-}
-
-interface CandidateProblem {
-  rootCause: string;
-  fields: CandidateProblemField[];
-}
-
-interface CandidateReportData {
-  conclusion: { id: string; title: string; items: CandidateConclusionItem[] };
-  strengths: { id: string; title: string; items: CandidateStrength[] } | null;
-  problems: { id: string; title: string; items: CandidateProblem[] };
-  checklist: { id: string; title: string; items: string[] } | null;
-}
-
-// Parse a leading "**label：**text" / "**label**: text" prefix; returns null when absent
-const parseLabeledText = (text: string): { label: string; text: string } | null => {
-  const m = text.match(/^\*\*([^*]+?)\*\*\s*[：:]?\s*([\s\S]+)$/);
-  if (!m) return null;
-  const label = m[1].replace(/[：:]\s*$/, '').replace(/^[\[【]|[\]】]$/g, '').trim();
-  return { label, text: m[2].trim() };
-};
-
-const stripBulletMarker = (line: string) => line.replace(/^\s*[-*]\s+/, '');
-const stripNumberMarker = (line: string) => line.replace(/^\s*\d+\s*[.、．]\s*/, '');
-
-// Parse the candidate coaching report into structured blocks; returns null when the
-// expected sections are missing so the caller can fall back to generic markdown rendering
-const parseCandidateReport = (sections: ReportSection[]): CandidateReportData | null => {
-  const findSection = (...keywords: string[]) =>
-    sections.find((s) => keywords.some((k) => s.title.includes(k)));
-
-  const conclusionSec = findSection('结论');
-  const strengthsSec = findSection('值得保留', '亮点');
-  const problemsSec = findSection('核心问题');
-  const checklistSec = findSection('准备清单');
-  if (!conclusionSec || !problemsSec) return null;
-
-  // 结论：优先解析「**标签：** 一句话」；老报告没有标签时退化为整段文本（label 为空）
-  let conclusionItems = conclusionSec.body
-    .split(/\n\s*\n/)
-    .map((p) => parseLabeledText(stripNumberMarker(stripBulletMarker(p.replace(/\n/g, ' ').trim()))))
-    .filter((x): x is CandidateConclusionItem => !!x && !!x.text);
-  if (conclusionItems.length === 0) {
-    // 老报告无标签：段落按句号/问号/叹号拆成单句，渲染为无序列表
-    conclusionItems = conclusionSec.body
-      .split(/\n\s*\n/)
-      .flatMap((p) => p.replace(/\n/g, ' ').trim().split(/(?<=[。！？])/))
-      .map((text) => text.trim())
-      .filter(Boolean)
-      .map((text) => ({ label: '', text }));
-  }
-  if (conclusionItems.length === 0) return null;
-
-  // 亮点：- **标题**：证据（也兼容无加粗标题的纯文本条目）
-  const strengthItems = (strengthsSec?.body || '')
-    .split('\n')
-    .filter((l) => /^\s*[-*]\s+/.test(l))
-    .map((l) => {
-      const parsed = parseLabeledText(stripBulletMarker(l).trim());
-      return parsed
-        ? { title: parsed.label, evidence: parsed.text }
-        : { title: '', evidence: stripBulletMarker(l).trim() };
-    })
-    .filter((s) => s.evidence);
-
-  // 核心问题：### N. 根因，正文为「- **字段**：内容」列表
-  const problemItems: CandidateProblem[] = [];
-  const blocks = problemsSec.body.split(/^###\s+/m);
-  for (let i = 1; i < blocks.length; i++) {
-    const block = blocks[i];
-    const newlineIdx = block.indexOf('\n');
-    const rootCause = stripNumberMarker((newlineIdx === -1 ? block : block.slice(0, newlineIdx)).trim());
-    const rest = newlineIdx === -1 ? '' : block.slice(newlineIdx + 1);
-    const fields = rest
-      .split(/^\s*[-*]\s+/m)
-      .slice(1)
-      .map((b) => parseLabeledText(b.replace(/\n+/g, ' ').trim()))
-      .filter((x): x is CandidateProblemField => !!x && !!x.text);
-    if (rootCause) problemItems.push({ rootCause, fields });
-  }
-  if (problemItems.length === 0) return null;
-
-  // 准备清单：优先解析编号列表；老报告没有编号时按非空行兜底
-  let checklistItems = (checklistSec?.body || '')
-    .split('\n')
-    .filter((l) => /^\s*\d+\s*[.、．]/.test(l))
-    .map((l) => stripNumberMarker(l).trim())
-    .filter(Boolean);
-  if (checklistItems.length === 0 && checklistSec) {
-    checklistItems = checklistSec.body
-      .split('\n')
-      .map((l) => stripBulletMarker(l).trim())
-      .filter(Boolean);
-  }
-
-  return {
-    conclusion: { id: conclusionSec.id, title: conclusionSec.title, items: conclusionItems },
-    strengths: strengthsSec
-      ? { id: strengthsSec.id, title: strengthsSec.title, items: strengthItems }
-      : null,
-    problems: { id: problemsSec.id, title: problemsSec.title, items: problemItems },
-    checklist: checklistSec
-      ? { id: checklistSec.id, title: checklistSec.title, items: checklistItems }
-      : null,
-  };
 };
 
 // Section header shared by the structured candidate blocks: one restrained style everywhere
@@ -468,15 +291,22 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
 
   const reportMode = analysis?.analysisMode ?? authMode;
   const isCandidate = reportMode === 'candidate';
-  const sections = useMemo(() => splitSections(analysis?.result || ''), [analysis?.result]);
-  const dimensions = useMemo(
-    () => isCandidate ? [] : parseDimensions(analysis?.result || ''),
-    [analysis?.result, isCandidate]
-  );
-  const candidateData = useMemo(
-    () => (isCandidate ? parseCandidateReport(sections) : null),
-    [sections, isCandidate]
-  );
+  const reportDocument = useMemo(() => buildReportDocumentModel({
+    mode: reportMode,
+    result: analysis?.result || '',
+    fileName: analysis?.fileName ?? null,
+    createdAt,
+    resumeFileName: analysis?.resumeFileName,
+    resumeParseStatus: analysis?.resumeParseStatus,
+  }), [
+    analysis?.fileName,
+    analysis?.result,
+    analysis?.resumeFileName,
+    analysis?.resumeParseStatus,
+    createdAt,
+    reportMode,
+  ]);
+  const { sections, dimensions, candidate: candidateData } = reportDocument;
 
   // Track the currently visible section for TOC highlighting
   useEffect(() => {
@@ -674,7 +504,7 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     );
   }
 
-  const score = !isCandidate && analysis.result ? getOverallScore(analysis.result) : null;
+  const score = reportDocument.overallScore;
   const feedbackIssues = isCandidate
     ? ['核心问题不准确', '证据引用不准确', '示范回答不实用', '行动建议不具体', '遗漏重要问题', '其他问题']
     : ['评分标准不准确', 'STAR法则应用不当', '人岗匹配分析错误', '维度评估不全面', '风险提示不清晰', '其他问题'];
