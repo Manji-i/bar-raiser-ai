@@ -143,6 +143,8 @@ curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC
 
 Node 默认只监听 `127.0.0.1:3000`。发布时还必须确认云安全组和主机防火墙没有向公网开放 `3000/tcp`；从外网访问 `evalbar.cn:3000` 和服务器 IP `:3000` 应拒绝连接或超时。
 
+`/api/analyze` 是同步长请求。生产 Nginx 必须为该路径单独设置 `proxy_connect_timeout 5s`、`proxy_send_timeout 660s` 和 `proxy_read_timeout 660s`，其余 API 沿用默认短超时。修改后依次执行 `nginx -t` 和 `systemctl reload nginx`；不要把全站超时统一放大。应用内 AI SDK 的 `AI_REQUEST_TIMEOUT_MS` 为 600000（10 分钟），因此代理层比应用层多保留 60 秒用于稳定返回错误。
+
 ## Docker 部署
 
 ```bash
@@ -185,7 +187,14 @@ pm2 save
 |--------|------|------|
 | `PORT` | 服务端口 | `3000` |
 | `FRONTEND_URL` | 前端访问地址 | `https://your-domain.com` |
-| `AI_PROVIDER` | AI 服务提供商 | `doubao` |
+| `AI_PROVIDER` | AI 服务提供商 | `deepseek` |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key | `xxx` |
+| `DEEPSEEK_MODEL` | DeepSeek 模型 | `deepseek-v4-flash` |
+| `DEEPSEEK_BASE_URL` | DeepSeek OpenAI-compatible Base URL | `https://api.deepseek.com` |
+| `DEEPSEEK_THINKING` | DeepSeek 思考模式，默认启用 | `enabled` |
+| `DEEPSEEK_REASONING_EFFORT` | 思考强度 | `high` |
+| `AI_REQUEST_TIMEOUT_MS` | AI SDK 超时毫秒数 | `600000` |
+| `AI_MAX_RETRIES` | SDK 自动重试次数；长请求建议为 0 | `0` |
 | `DOUBAO_MODEL` | 豆包模型 ID，默认 Seed 2.1 Pro | `doubao-seed-2-1-pro-260628` |
 | `DOUBAO_ENDPOINT_ID` | 旧版豆包 Endpoint ID（`DOUBAO_MODEL` 优先） | `ep-xxx` |
 | `DOUBAO_API_KEY` | 豆包 API Key | `xxx` |

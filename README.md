@@ -2,7 +2,7 @@
 
 Eval Bar AI 是一个面向面试记录分析的双模式工具：招聘方可以评估人岗匹配，候选人可以复盘自己的真实面试表现。系统支持上传或粘贴面试材料，并分别生成招聘评估报告或个人提升报告。
 
-当前项目由 React 前端和 Node.js/Express 后端组成，AI 能力可通过环境变量在 Google Gemini 与豆包 Ark 之间切换。
+当前项目由 React 前端和 Node.js/Express 后端组成，AI 能力可通过环境变量在 DeepSeek、Google Gemini 与豆包 Ark 之间切换。
 
 ## 核心功能
 
@@ -12,7 +12,7 @@ Eval Bar AI 是一个面向面试记录分析的双模式工具：招聘方可�
 - **人岗匹配分析**：围绕目标岗位、胜任力要求和面试记录生成结构化评估报告。
 - **个人面试复盘**：职位名称和面试记录必填，JD 与简历选填；首次报告集中呈现 3–5 个核心问题，不输出录用等级或匹配分数。
 - **简历解析兜底**：简历支持 PDF、DOCX、TXT，最大 10 MB；解析质量较低时可人工修订文本，低质量原文不会直接进入 AI 输入。
-- **多模型支持**：通过 `AI_PROVIDER` 在 `gemini` 和 `doubao` 之间切换。
+- **多模型支持**：通过 `AI_PROVIDER` 在 `deepseek`、`gemini` 和 `doubao` 之间切换；DeepSeek V4 Flash 支持显式思考模式。
 - **登录与权限**：支持用户名密码注册和登录；普通用户只能访问自己的报告，管理员可查看全量报告和反馈。
 - **报告管理**：支持查看历史报告、复制分享链接、删除报告，并导出 Markdown 或可搜索文字型 PDF；PDF 在浏览器后台预生成，点击后直接下载。
 - **反馈闭环**：用户可对报告评分并提交问题反馈；管理员可查看反馈并用于 Prompt 迭代。
@@ -22,7 +22,7 @@ Eval Bar AI 是一个面向面试记录分析的双模式工具：招聘方可�
 
 - 前端：React、TypeScript、Vite、React Router、Tailwind CDN、lucide-react
 - 后端：Node.js ESM、Express
-- AI 服务：Google Gemini 或豆包 Ark
+- AI 服务：DeepSeek、Google Gemini 或豆包 Ark
 - 存储：SQLite（Node 内置 `node:sqlite`），数据库文件 `data/app.db`
 
 ## 本地运行
@@ -40,8 +40,19 @@ npm install
 在项目根目录创建 `.env.local`，按需填写 AI 服务配置。
 
 ```env
-# AI Provider: gemini 或 doubao
-AI_PROVIDER=doubao
+# AI Provider: deepseek、gemini 或 doubao
+AI_PROVIDER=deepseek
+
+# DeepSeek V4 Flash（思考模式）
+DEEPSEEK_API_KEY=your_deepseek_key
+DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_THINKING=enabled
+DEEPSEEK_REASONING_EFFORT=high
+
+# AI SDK 最长等待 10 分钟，不自动重试长请求
+AI_REQUEST_TIMEOUT_MS=600000
+AI_MAX_RETRIES=0
 
 # Google Gemini
 GEMINI_API_KEY=your_gemini_key
@@ -87,13 +98,14 @@ mkdir -p data
 docker build -t bar-raiser-ai .
 docker run -p 3000:3000 \
   -v "$(pwd)/data:/app/data" \
-  -e AI_PROVIDER=doubao \
-  -e DOUBAO_API_KEY=your_key \
-  -e DOUBAO_MODEL=doubao-seed-2-1-pro-260628 \
+  -e AI_PROVIDER=deepseek \
+  -e DEEPSEEK_API_KEY=your_key \
+  -e DEEPSEEK_MODEL=deepseek-v4-flash \
+  -e DEEPSEEK_THINKING=enabled \
   bar-raiser-ai
 ```
 
-部署到火山引擎 VCI、VKE 或其他容器平台时，需要在容器环境变量中配置 `AI_PROVIDER`、`DOUBAO_API_KEY`、`DOUBAO_MODEL` 等必要参数（旧版 `DOUBAO_ENDPOINT_ID` 仍兼容），暴露 3000 端口，并为 `/app/data` 挂载持久化存储。否则容器重建会丢失用户、报告和简历源文件。
+部署到容器平台时，需要在容器环境变量中配置所选 Provider 的 Key、模型和超时参数，暴露 3000 端口，并为 `/app/data` 挂载持久化存储。否则容器重建会丢失用户、报告和简历源文件。
 
 ## 项目结构
 

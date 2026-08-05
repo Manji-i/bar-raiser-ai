@@ -113,6 +113,15 @@ pm2 logs bar-raiser-ai --lines 50 --nostream
 
 允许记录启动状态、AI Provider 名称和错误类型；不得记录 token、API Key、面试原文、简历正文、原文件路径或候选人个人信息。
 
+每个真正进入模型调用的分析会在结束时写一条 `event=analysis_completed` 的 JSON 日志，字段为 `analysisId`、`analysisMode`、`provider`、`model`、`status`、`durationMs`、`inputChars`、`outputChars` 和 `errorCode`。统计生成时间时只筛选该事件；`status=success` 表示报告已持久化，`failure` 表示失败，`cancelled` 表示客户端提前断开。日志不包含用户 ID 或候选人材料。
+
+```bash
+pm2 logs bar-raiser-ai --lines 1000 --nostream \
+  | grep '"event":"analysis_completed"'
+```
+
+历史报告没有生成开始时间，不能从 `reports.created_at` 反推真实耗时。上线该日志后，平均耗时使用成功记录的 `durationMs` 计算，并同时观察 P50、P90、最大值和失败率，避免平均数掩盖长尾。
+
 历史日志可能包含旧错误。判断本次发布是否异常时，应结合 PM2 重启时间、最新 PID 和日志时间，不把无时间戳的旧行直接当作当前故障。
 
 ## 6. 常见故障
@@ -145,6 +154,12 @@ pm2 logs bar-raiser-ai --lines 50 --nostream
 ### AI 请求失败
 
 检查 PM2 日志中的错误类型，再由有权限的人核对 `.env` 中的 Provider、模型和 Key。不要打印或复制配置值。AI 失败不应创建报告或源文件。
+
+### 分析返回 504
+
+先区分两类 504：Nginx access/error log 在约 60 秒出现 `upstream timed out`，通常说明 `/api/analyze` 未命中 660 秒专用代理超时；PM2 结构化日志出现 `AI_UPSTREAM_TIMEOUT`，说明应用已等待模型 600 秒仍未完成。前者检查 `nginx -T` 中 `/api/analyze` 的 `proxy_read_timeout`，后者检查 DeepSeek 状态与请求规模。不要通过无限放大超时掩盖持续的模型异常。
+
+客户端断开会取消仍在途的 DeepSeek 请求，但并发锁要等上游 Promise 结束后才释放。看到 `AI_REQUEST_CANCELLED` 时应先判断用户刷新、关闭页面或网络中断，不当作模型 504。
 
 ### 接口返回 429
 

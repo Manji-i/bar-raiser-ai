@@ -113,6 +113,9 @@ PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和�
 | `services/authSession.js` | HttpOnly Cookie 与受控 Bearer Token 提取 |
 | `services/adminBootstrapService.js` | 仅空 users 表可执行的管理员初始化事务 |
 | `services/requestGuards.js` | 单进程请求窗口额度与分析并发保护 |
+| `services/aiService.js` | Gemini、豆包与 DeepSeek 的统一调用、超时和错误归一化 |
+| `services/analysisExecution.js` | 分析生命周期、客户端断线取消与并发锁释放 |
+| `services/analysisTelemetry.js` | 不含候选人材料的分析耗时结构化日志 |
 | `services/feedbackValidation.js` | 新反馈 Schema 和两种模式问题标签单一来源 |
 | `services/promptSecurity.js` | 不可信输入安全契约与模型输出边界 |
 | `services/httpSecurity.js` | CSP/HSTS 等响应头和 Origin 白名单 |
@@ -122,6 +125,8 @@ PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和�
 服务端对注册、登录、集成 Token、反馈和 AI 分析设置固定窗口额度；AI 分析同时按 IP、用户小时、用户每日计数，并限制同一用户只有一个请求在途。超出窗口额度返回 `429 RATE_LIMITED`，并发冲突返回 `429 ANALYSIS_IN_PROGRESS`，均发生在调用 AI Provider 之前。
 
 当前额度保存在 Node.js 进程内存中，PM2 重启会重置计数。若以后启用 cluster 或多实例部署，必须先把计数和并发锁迁移到 Redis 等共享存储，否则各实例会分别计算额度。
+
+分析仍采用同步 HTTP：浏览器等待 Nginx，Nginx 等待 Node，Node 等待 AI Provider。DeepSeek 请求在 SDK 层最长等待 600 秒，Nginx 只对 `/api/analyze` 保留 660 秒；客户端提前断开时 Node 通过 `AbortSignal` 取消上游请求，并在上游结束后释放用户并发锁。每次模型调用结束后写一条不含正文和用户标识的结构化耗时日志。长期若需要跨刷新恢复任务，应改为持久化异步任务，而不是继续增加同步超时。
 
 ### 5.2 认证与 HTTP 边界
 
