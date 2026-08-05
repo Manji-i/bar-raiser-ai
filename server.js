@@ -2,8 +2,6 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
-import { GoogleGenAI } from '@google/genai';
-import OpenAI from 'openai';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
@@ -43,6 +41,7 @@ import {
   applyStaticAssetCacheHeaders,
   isAllowedOrigin,
 } from './services/httpSecurity.js';
+import { createAiService } from './services/aiService.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -50,6 +49,7 @@ dotenv.config({ path: '.env.local', override: true, quiet: true });
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = getListenHost();
+const aiService = createAiService();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,32 +152,6 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-// Model Configuration
-const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini'; // 'gemini' or 'doubao'
-// Doubao model: prefer DOUBAO_MODEL (Ark model ID), fall back to legacy DOUBAO_ENDPOINT_ID
-const DOUBAO_MODEL = process.env.DOUBAO_MODEL || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2-1-pro-260628';
-
-// Initialize AI Clients
-let googleAi = null;
-let openai = null;
-
-if (AI_PROVIDER === 'gemini') {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-        googleAi = new GoogleGenAI({ apiKey });
-    } else {
-        console.warn("Warning: GEMINI_API_KEY is not set.");
-    }
-} else if (AI_PROVIDER === 'doubao') {
-    const apiKey = process.env.DOUBAO_API_KEY;
-    const baseURL = process.env.DOUBAO_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
-    if (apiKey) {
-        openai = new OpenAI({ apiKey, baseURL });
-    } else {
-        console.warn("Warning: DOUBAO_API_KEY is not set.");
-    }
-}
-
 const resumeUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -215,33 +189,6 @@ const uploadResume = (req, res, next) => {
       code: 'INVALID_RESUME_UPLOAD',
     });
   });
-};
-
-const runAiAnalysis = async (systemPrompt, inputContent) => {
-  if (AI_PROVIDER === 'gemini') {
-    if (!googleAi) throw new Error('Gemini is not configured.');
-    const response = await googleAi.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: inputContent,
-      config: { systemInstruction: systemPrompt, temperature: 0.4 }
-    });
-    return typeof response.text === 'function' ? response.text() : response.text;
-  }
-
-  if (AI_PROVIDER === 'doubao') {
-    if (!openai) throw new Error('Doubao (OpenAI) is not configured.');
-    const completion = await openai.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: inputContent }
-      ],
-      model: DOUBAO_MODEL,
-      temperature: 0.4
-    });
-    return completion.choices[0]?.message?.content;
-  }
-
-  throw new Error(`Unsupported AI Provider: ${AI_PROVIDER}`);
 };
 
 const isRequestValidationError = (error) => (
@@ -321,7 +268,7 @@ app.get('/api/auth/me', authenticate, (req, res) => {
 
 // Analyze Interview (需要认证)
 app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, res) => {
-  console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${AI_PROVIDER}`);
+  console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${aiService.provider}`);
   try {
     const analysisMode = validateAnalysisRequest(req.body);
     const resumeParseStatus = req.body.resumeParseStatus || (req.file ? null : 'not_provided');
@@ -359,7 +306,7 @@ app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, 
     res.once('finish', releaseAnalysis);
     res.once('close', releaseAnalysis);
     const resultText = validateAnalysisOutput(
-      await runAiAnalysis(systemPrompt, inputContent),
+      await aiService.runAnalysis({ systemPrompt, inputContent }),
     );
 
     const reportId = uuidv4();
@@ -587,6 +534,6 @@ export { app };
 if (process.argv[1] === __filename) {
   app.listen(PORT, HOST, () => {
     console.log(`Server is running on ${HOST}:${PORT}`);
-    console.log(`AI Provider: ${AI_PROVIDER}`);
+    console.log(`AI Provider: ${aiService.provider}`);
   });
 }
