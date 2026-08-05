@@ -2,16 +2,17 @@
 
 ## 当前部署检查点
 
-截至 2026-08-05，DeepSeek V4 Flash 与分析超时修复已通过 Bundle 和本地构建产物部署生产；该提交尚未推送 GitHub。生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
+截至 2026-08-05，生产 Provider 已切回豆包 Seed 2.1 Pro，并上线流式接收修复；相关提交尚未推送 GitHub。生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
 
 - 线上地址：`https://evalbar.cn/`；Node 的 `127.0.0.1:3000` 仅供本机 Nginx 反代。
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
-- 当前生产代码：`c8950307fd22c704d3f76503dabef69bd5accdea`
+- 当前生产代码：`b361946104035f4b6abc31f68560984d081a0f8d`
 - 当前首页资源：`/assets/index-CH85fL1J.js`、`/assets/index-DZT1nRDZ.css`
 - 2026-08-05 DeepSeek 发布前数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-185421`
 - 2026-08-05 DeepSeek 发布前环境配置备份：`/root/bar-raiser-ai-backups/env-local-before-20260805-185421`
 - 2026-08-05 DeepSeek 发布前 Nginx 配置备份：`/root/bar-raiser-ai-backups/evalbar-nginx-before-20260805-185421`
+- 2026-08-05 豆包流式修复前数据备份：`/root/bar-raiser-ai-backups/data-before-doubao-stream-20260805-201038`
 - 2026-08-05 PDF 修复前完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-161503`
 - 2026-08-05 PDF 修复前静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260805-161541`
 - 2026-08-05 完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-154223`
@@ -31,6 +32,15 @@
 - 本次未发起真实生产分析，因此首条耗时日志要等真实用户分析结束后产生；历史报告没有开始时间，无法反推历史平均耗时。
 
 完整配置、验证证据和备份路径见[DeepSeek V4 Flash 与分析超时修复验证记录](superpowers/verification/2026-08-05-deepseek-timeout-deployment.md)。
+
+## 2026-08-05 已发布：豆包 300 秒首响应修复
+
+- 同一份招聘端输入使用 DeepSeek V4 Flash 成功耗时 54.67 秒；切回 `doubao-seed-2-1-pro-260628` 后，非流式调用在 300.811 秒失败，未创建报告。
+- 生产 Node v22.22.0 内置 Undici 6.23.0；非流式豆包调用会在完整报告生成前长时间收不到响应，触发 300 秒响应头或 Ark 网关边界。
+- 豆包改为 `stream: true`，服务端持续接收分片并在内存中拼接最终 Markdown；浏览器仍只在报告完整校验并保存后展示，产品交互不变。
+- `UND_ERR_HEADERS_TIMEOUT`、`UND_ERR_BODY_TIMEOUT`、`ETIMEDOUT` 和上游 HTTP 504 统一映射为 `AI_UPSTREAM_TIMEOUT`。
+- 自动重试继续为 0，避免长请求失败后重复计费；本地 102 项测试和生产构建通过，生产 PM2、Nginx 与 HTTPS 首页在线。
+- 本轮未发起额外真实模型请求，等待用户使用同一材料复测实际生成耗时。
 
 ## 已交付能力
 
