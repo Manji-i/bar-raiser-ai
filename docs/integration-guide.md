@@ -8,14 +8,16 @@
 
 ```bash
 BASE_URL=http://localhost:3000
-TOKEN=<登录后返回的 token>
+COOKIE_JAR="$(mktemp)"
 ```
 
 不要把真实 token、候选人材料或简历写进代码仓库、命令历史或共享日志。
 
 ## 2. 认证
 
-除注册和登录外，业务接口统一使用：
+网页端使用同源 HttpOnly Cookie，会话有效期为 12 小时。Cookie 不能被前端 JavaScript 读取；注册和网页登录响应只返回用户信息，不返回 Token。
+
+非浏览器集成必须显式调用 `/api/auth/token` 获取短期 Bearer Token，业务接口使用：
 
 ```http
 Authorization: Bearer <token>
@@ -25,17 +27,29 @@ Authorization: Bearer <token>
 
 ```bash
 curl -X POST "$BASE_URL/api/auth/register" \
+  -c "$COOKIE_JAR" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"demo-user","password":"<password>"}'
+  -d '{"username":"demo-user","password":"至少十位的合成密码"}'
 ```
 
 ### 登录
 
 ```bash
 curl -X POST "$BASE_URL/api/auth/login" \
+  -c "$COOKIE_JAR" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"demo-user","password":"<password>"}'
+  -d '{"username":"demo-user","password":"至少十位的合成密码"}'
 ```
+
+### 非浏览器 Token
+
+```bash
+token_response="$(curl -sS -X POST "$BASE_URL/api/auth/token" \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo-user","password":"至少十位的合成密码"}')"
+```
+
+响应中的 Token 只显示一次，数据库只保存其 SHA-256 摘要。调用方必须在受保护的内存或密钥存储中使用，不能写入命令历史或日志。
 
 ### 当前用户与退出
 
@@ -43,6 +57,8 @@ curl -X POST "$BASE_URL/api/auth/login" \
 GET  /api/auth/me
 POST /api/auth/logout
 ```
+
+网页端请求应携带 Cookie；命令行可用 `curl -b "$COOKIE_JAR"`。非浏览器集成也可以继续发送 Bearer Token。
 
 当前注册和登录 API 不接收、也不在 token 中保存角色。网页端选择的“提升自己 / 判断他人”仅由 `AuthContext` 在浏览器侧锁定，用于产品导航和历史展示；API 调用方必须显式传递并自行保持正确的 `analysisMode`。该值不是服务端权限声明，同一账号仍可请求本人另一模式的数据。需要服务端强隔离时应升级为 token 绑定角色，具体见[未来需迭代内容](未来需迭代内容.md)。
 

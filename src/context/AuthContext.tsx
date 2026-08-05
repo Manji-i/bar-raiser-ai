@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
   ANALYSIS_MODE_KEY,
   AUTH_MODE_KEY,
@@ -19,7 +19,6 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   analysisMode: AnalysisMode | null;
   login: (username: string, password: string, analysisMode: AnalysisMode) => Promise<void>;
   register: (
@@ -33,149 +32,129 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const AUTH_STORAGE_KEYS = new Set(['auth_token', 'auth_user', AUTH_MODE_KEY]);
+const AUTH_STORAGE_KEYS = new Set([AUTH_MODE_KEY]);
 
-const clearStoredAuth = () => {
+const clearLegacyAuthKeys = () => {
   localStorage.removeItem('auth_token');
   localStorage.removeItem('auth_user');
   localStorage.removeItem('admin');
+};
+
+const clearStoredAuth = () => {
+  clearLegacyAuthKeys();
   localStorage.removeItem(ANALYSIS_MODE_KEY);
   sessionStorage.removeItem(POST_LOGIN_PATH_KEY);
   clearAuthMode();
   clearPostLoginMode();
 };
 
+const readError = async (response: Response, fallback: string) => {
+  const data = await response.json().catch(() => ({}));
+  return typeof data.error === 'string' ? data.error : fallback;
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('auth_token');
-    const savedUser = localStorage.getItem('auth_user');
+    let active = true;
+    clearLegacyAuthKeys();
     const savedMode = getAuthMode();
 
-    if (savedToken && savedUser && savedMode) {
+    const restore = async () => {
+      if (!savedMode) {
+        clearStoredAuth();
+        if (active) setLoading(false);
+        return;
+      }
+
       try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
-        setAnalysisMode(savedMode);
+        const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        if (!response.ok) throw new Error('Session unavailable');
+        const data = await response.json();
+        if (active) {
+          setUser(data.user);
+          setAnalysisMode(savedMode);
+        }
       } catch {
         clearStoredAuth();
+      } finally {
+        if (active) setLoading(false);
       }
-    } else {
-      clearStoredAuth();
-    }
+    };
 
-    setLoading(false);
+    void restore();
 
     const handleStorage = (event: StorageEvent) => {
       if (event.storageArea === localStorage && (!event.key || AUTH_STORAGE_KEYS.has(event.key))) {
         setUser(null);
-        setToken(null);
         setAnalysisMode(null);
       }
     };
 
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    return () => {
+      active = false;
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
-  // 辅助函数：带认证的请求
-  const apiRequest = async (url: string, options: RequestInit = {}) => {
-    const headers = new Headers(options.headers);
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    
-    const response = await fetch(url, {
-      ...options,
-      headers
-    });
-    
-    return response;
-  };
-
-  const setAuthData = (newToken: string, newUser: User, newAnalysisMode: AnalysisMode) => {
+  const setAuthData = (newUser: User, newAnalysisMode: AnalysisMode) => {
     setUser(newUser);
-    setToken(newToken);
     setAnalysisMode(newAnalysisMode);
-    
-    // 保存到localStorage
-    localStorage.setItem('auth_token', newToken);
-    localStorage.setItem('auth_user', JSON.stringify(newUser));
     setAuthMode(newAnalysisMode);
-    
-    // 设置admin标识
-    if (newUser.isAdmin) {
-      localStorage.setItem('admin', 'true');
-    } else {
-      localStorage.removeItem('admin');
-    }
   };
 
-  const login = async (username: string, password: string, analysisMode: AnalysisMode) => {
+  const login = async (username: string, password: string, mode: AnalysisMode) => {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Login failed');
-    }
-
+    if (!response.ok) throw new Error(await readError(response, 'Login failed'));
     const data = await response.json();
-    setAuthData(data.token, data.user, analysisMode);
+    setAuthData(data.user, mode);
   };
 
   const register = async (
     username: string,
     password: string,
-    analysisMode: AnalysisMode,
+    mode: AnalysisMode,
     email?: string,
   ) => {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, email })
+      body: JSON.stringify({ username, password, email }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Registration failed');
-    }
-
+    if (!response.ok) throw new Error(await readError(response, 'Registration failed'));
     const data = await response.json();
-    setAuthData(data.token, data.user, analysisMode);
+    setAuthData(data.user, mode);
   };
 
   const logout = async () => {
-    if (token) {
-      try {
-        await apiRequest('/api/auth/logout', { method: 'POST' });
-      } catch (error) {
-        console.error('Logout error:', error);
-      }
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (error) {
+      console.error('Logout error:', error instanceof Error ? error.name : 'Error');
     }
-    
     setUser(null);
-    setToken(null);
     setAnalysisMode(null);
     clearStoredAuth();
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      token, 
+    <AuthContext.Provider value={{
+      user,
       analysisMode,
-      login, 
-      register, 
-      logout, 
-      loading 
+      login,
+      register,
+      logout,
+      loading,
     }}>
       {children}
     </AuthContext.Provider>
@@ -184,8 +163,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

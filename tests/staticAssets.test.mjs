@@ -28,6 +28,18 @@ const reportView = readFileSync(
   new URL('../components/ReportView.tsx', import.meta.url),
   'utf8',
 );
+const historyView = readFileSync(
+  new URL('../components/HistoryView.tsx', import.meta.url),
+  'utf8',
+);
+const adminView = readFileSync(
+  new URL('../components/AdminView.tsx', import.meta.url),
+  'utf8',
+);
+const geminiService = readFileSync(
+  new URL('../services/geminiService.ts', import.meta.url),
+  'utf8',
+);
 
 test('页面入口不引用不存在的 index.css', () => {
   assert.doesNotMatch(indexHtml, /href=["']\/index\.css["']/);
@@ -42,9 +54,18 @@ test('招聘方上传页不使用未安装的 Tailwind 动画或未定义工具�
 
 test('登录与注册显式绑定角色，认证上下文缺少角色时拒绝恢复会话', () => {
   assert.match(authContext, /analysisMode:\s*AnalysisMode\s*\|\s*null/);
-  assert.match(authContext, /savedToken\s*&&\s*savedUser\s*&&\s*savedMode/);
+  assert.match(authContext, /fetch\(['"]\/api\/auth\/me['"]/);
+  assert.match(authContext, /getAuthMode\(\)/);
   assert.match(authContext, /login:\s*\([^)]*analysisMode:\s*AnalysisMode/);
   assert.match(authContext, /register:\s*\([^)]*analysisMode:\s*AnalysisMode/);
+});
+
+test('浏览器认证不在 localStorage 保存或读取 Bearer Token', () => {
+  for (const source of [authContext, reportView, historyView, adminView, geminiService]) {
+    assert.doesNotMatch(source, /localStorage\.(?:getItem|setItem)\(['"]auth_token['"]/);
+  }
+  assert.doesNotMatch(authContext, /Authorization/);
+  assert.doesNotMatch(geminiService, /Authorization/);
 });
 
 test('登录页提供两个角色选项且主按钮只显示登录或注册', () => {

@@ -23,6 +23,13 @@ import {
   validateResumeFile
 } from './services/reportAttachmentService.js';
 import { getListenHost } from './services/serverConfig.js';
+import {
+  SESSION_COOKIE_NAME,
+  clearCookieOptions,
+  cookieOptions,
+  extractSessionToken,
+} from './services/authSession.js';
+import { SESSION_TTL_MS } from './services/sessionToken.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -34,18 +41,15 @@ const HOST = getListenHost();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+app.set('trust proxy', 'loopback');
 app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
 // 认证中间件
 const authenticate = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  
-  const token = authHeader.slice(7);
+  const token = extractSessionToken(req);
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
   const user = userService.verifyToken(token);
   
   if (!user) {
@@ -53,6 +57,7 @@ const authenticate = (req, res, next) => {
   }
   
   req.user = user;
+  req.sessionToken = token;
   next();
 };
 
@@ -138,7 +143,11 @@ const isRequestValidationError = (error) => /^(Invalid|Missing|Resume|Unsupporte
 // API Routes
 
 // User Endpoints
-app.post('/api/auth/register', (req, res) => {
+const setSessionCookie = (req, res, token) => {
+  res.cookie(SESSION_COOKIE_NAME, token, cookieOptions(req.secure));
+};
+
+app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, password, email } = req.body;
     
@@ -146,14 +155,15 @@ app.post('/api/auth/register', (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
     
-    const result = userService.register(username, password, email);
-    res.json(result);
+    const result = await userService.register(username, password, email);
+    setSessionCookie(req, res, result.token);
+    res.json({ user: result.user });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -161,18 +171,35 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
     
-    const result = userService.login(username, password);
-    res.json(result);
+    const result = await userService.login(username, password);
+    setSessionCookie(req, res, result.token);
+    res.json({ user: result.user });
   } catch (error) {
     res.status(401).json({ error: error.message });
   }
 });
 
+app.post('/api/auth/token', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+    const result = await userService.login(username, password);
+    return res.json({
+      user: result.user,
+      token: result.token,
+      expiresIn: Math.floor(SESSION_TTL_MS / 1000),
+    });
+  } catch {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
 app.post('/api/auth/logout', authenticate, (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader.slice(7);
-    userService.logout(token);
+    userService.logout(req.sessionToken);
+    res.clearCookie(SESSION_COOKIE_NAME, clearCookieOptions(req.secure));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

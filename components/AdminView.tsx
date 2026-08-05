@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, Star, MessageSquare, RefreshCw, Eye, FileText, Calendar, Briefcase, TrendingUp, Bot, Lightbulb } from 'lucide-react';
 import { format } from 'date-fns';
 import type { AnalysisMode } from '../types';
+import { useAuth } from '../src/context/AuthContext';
 
 interface Report {
   id: string;
@@ -29,19 +30,8 @@ interface Feedback {
   createdAt: string;
 }
 
-// 辅助函数：获取带认证的请求头
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('auth_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
-
 const AdminView: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'feedback' | 'reports' | 'prompt'>('feedback');
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -56,15 +46,7 @@ const AdminView: React.FC = () => {
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptMessage, setPromptMessage] = useState('');
-  const [authenticated, setAuthenticated] = useState(() => {
-    const token = localStorage.getItem('auth_token');
-    const user = localStorage.getItem('auth_user');
-    if (token && user) {
-      const userData = JSON.parse(user);
-      return userData.isAdmin;
-    }
-    return false;
-  });
+  const authenticated = !!user?.isAdmin;
 
   useEffect(() => {
     if (authenticated) {
@@ -83,8 +65,8 @@ const AdminView: React.FC = () => {
     setLoading(true);
     try {
       const [feedbackRes, reportsRes] = await Promise.all([
-        fetch('/api/feedback', { headers: getAuthHeaders() }),
-        fetch('/api/admin/reports', { headers: getAuthHeaders() }),
+        fetch('/api/feedback', { credentials: 'same-origin' }),
+        fetch('/api/admin/reports', { credentials: 'same-origin' }),
       ]);
       if (feedbackRes.ok) {
         setFeedbacks(await feedbackRes.json());
@@ -103,7 +85,7 @@ const AdminView: React.FC = () => {
     setPromptLoading(true);
     setPromptMessage('');
     try {
-      const response = await fetch(`/api/prompt/current?analysisMode=${mode}`, { headers: getAuthHeaders() });
+      const response = await fetch(`/api/prompt/current?analysisMode=${mode}`, { credentials: 'same-origin' });
       if (!response.ok) throw new Error('Prompt 加载失败');
       const data = await response.json();
       setPromptContent(data.content || '');
@@ -125,7 +107,8 @@ const AdminView: React.FC = () => {
     try {
       const response = await fetch('/api/prompt/current', {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ analysisMode: promptMode, content: promptContent }),
       });
       if (!response.ok) throw new Error('Prompt 保存失败');

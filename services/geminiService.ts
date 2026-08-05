@@ -1,16 +1,9 @@
 import type { AnalysisInput } from '../types';
 
-const authHeaders = (token: string | null): Headers => {
-  const headers = new Headers();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  return headers;
-};
-
 export const buildAnalysisRequest = (
   input: AnalysisInput,
-  token: string | null = typeof window === 'undefined' ? null : window.localStorage.getItem('auth_token')
 ): { headers: Headers; body: BodyInit } => {
-  const headers = authHeaders(token);
+  const headers = new Headers();
 
   if (input.analysisMode === 'candidate' && input.resumeFile) {
     const body = new FormData();
@@ -47,6 +40,7 @@ export const analyzeInterview = async (
   try {
     const response = await fetch('/api/analyze', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: request.headers,
       body: request.body,
     });

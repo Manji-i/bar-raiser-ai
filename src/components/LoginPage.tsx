@@ -131,9 +131,13 @@ const LoginPage: React.FC = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="输入密码"
+              placeholder={isLogin ? '输入密码' : '至少 10 位密码'}
+              minLength={isLogin ? undefined : 10}
               required
             />
+            {!isLogin && (
+              <p className="mt-1 text-xs text-slate-500">密码长度需为 10–128 位。</p>
+            )}
           </div>
 
           {error && (

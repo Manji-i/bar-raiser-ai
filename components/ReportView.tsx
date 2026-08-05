@@ -14,18 +14,6 @@ import {
 } from '../services/reportDocumentModel';
 import { usePreparedReportPdf } from '../services/pdf/usePreparedReportPdf';
 
-// 辅助函数：获取带认证的请求头
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('auth_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
-
 interface ReportViewProps {
   authMode: AnalysisMode;
   analysis?: AnalysisState;
@@ -238,7 +226,7 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     if (id && !initialAnalysis) {
       const fetchReport = async () => {
         try {
-          const res = await fetch(`/api/reports/${id}`, { headers: getAuthHeaders() });
+          const res = await fetch(`/api/reports/${id}`, { credentials: 'same-origin' });
           if (res.ok) {
             const report: Report = await res.json();
             if (!reportMatchesAuthMode(report.analysisMode, authMode)) {
@@ -364,7 +352,7 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     const reportId = analysis?.reportId || id;
     if (!reportId || !analysis?.resumeFileName) return;
     try {
-      const response = await fetch(`/api/reports/${reportId}/resume`, { headers: getAuthHeaders() });
+      const response = await fetch(`/api/reports/${reportId}/resume`, { credentials: 'same-origin' });
       if (!response.ok) throw new Error('Resume download failed');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -399,7 +387,7 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     try {
       const res = await fetch(`/api/reports/${reportId}`, {
         method: 'DELETE',
-        headers: getAuthHeaders()
+        credentials: 'same-origin',
       });
       if (res.ok) {
         if (onReset) onReset();
@@ -419,7 +407,8 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
     try {
       const res = await fetch('/api/feedback', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportId,
           rating: feedback.rating,

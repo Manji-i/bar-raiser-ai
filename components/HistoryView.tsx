@@ -7,18 +7,6 @@ import { AnalysisMode, Report } from '../types';
 import { ScoreBadge, getScoreBadgeClass } from './ui';
 import { modePath, reportMatchesAuthMode } from '../services/analysisMode';
 
-// 辅助函数：获取带认证的请求头
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('auth_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
-
 // Extract overall fit score from the report text (same rule as the report page)
 const getOverallScore = (text: string) => {
   const match = text.match(/(?:综合建议|匹配结论)[：:]\s*\*\*?([A-Za-z+-]+)\*\*?/i);
@@ -49,7 +37,7 @@ const HistoryView: React.FC<{ mode: AnalysisMode }> = ({ mode }) => {
 
   const fetchReports = async () => {
     try {
-      const res = await fetch(`/api/reports?analysisMode=${mode}`, { headers: getAuthHeaders() });
+      const res = await fetch(`/api/reports?analysisMode=${mode}`, { credentials: 'same-origin' });
       if (res.ok) {
         const data: Report[] = await res.json();
         setReports(data.filter((report) => reportMatchesAuthMode(report.analysisMode, mode)));
@@ -68,7 +56,7 @@ const HistoryView: React.FC<{ mode: AnalysisMode }> = ({ mode }) => {
     try {
       const res = await fetch(`/api/reports/${id}`, {
         method: 'DELETE',
-        headers: getAuthHeaders()
+        credentials: 'same-origin',
       });
       if (res.ok) {
         setReports(reports.filter(r => r.id !== id));
