@@ -2,13 +2,15 @@
 
 ## 当前部署检查点
 
-截至 2026-08-05，安全加固已合并到 `main`、推送 GitHub，并通过 Bundle 与本地构建产物部署生产。生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
+截至 2026-08-05，PDF 冷启动导出修复已合并到 `main`、推送 GitHub，并通过 Bundle 与本地构建产物部署生产。生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
 
 - 线上地址：`https://evalbar.cn/`；Node 的 `127.0.0.1:3000` 仅供本机 Nginx 反代。
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
-- 已部署安全代码：`9ff2c5971cb72b6563d579d0d2578de90bfea7d0`
-- 当前首页资源：`/assets/index-Dvf2D7pn.js`、`/assets/index-DZT1nRDZ.css`
+- 当前生产代码：`55921f7020d1c9a4cc07e2c3a0d526ed1bab4574`
+- 当前首页资源：`/assets/index-HWNnjYkV.js`、`/assets/index-DZT1nRDZ.css`
+- 2026-08-05 PDF 修复前完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-161503`
+- 2026-08-05 PDF 修复前静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260805-161541`
 - 2026-08-05 完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-154223`
 - 2026-08-05 静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260805-154333`
 - 2026-08-05 Nginx 配置备份：`/root/bar-raiser-ai-backups/evalbar.nginx-before-20260805-154321`
@@ -39,6 +41,16 @@
 - 当前 Chromium 不提供包含 Worker 的精确峰值内存数据，因此没有把 Worker 峰值内存写成已确认结论。
 
 完整验证数据见[客户端文字型 PDF 导出验证记录](superpowers/verification/2026-08-03-client-side-text-pdf-export.md)。
+
+## 2026-08-05 已发布：PDF 冷启动导出稳定性修复
+
+- 根因是生产网络首次下载两份中文字体分别约需 15–22 秒，而 PDF Worker 原先在 15 秒固定终止；HTTPS、安全响应头和 Worker 加载本身均正常。
+- PDF Worker 的准备与探针超时统一调整为 60 秒；报告页仍在后台预生成 Blob，用户交互仍是点击后直接下载。
+- 带内容哈希的 `/assets/*` 与版本化中文字体改为一年 `immutable` 缓存；`index.html` 不强缓存，避免版本更新后继续加载旧入口。
+- 本地和生产均通过 88 项测试；本地生产构建成功，生产机未执行构建。
+- 线上首页、主资源、Worker 和两份字体均返回 `200`，字体与主资源缓存头生效，PM2 在线；已登录报告页实际点击生成了 6 页 A4 有效 PDF，无失败弹窗。
+
+完整诊断和发布证据见[PDF 冷字体超时修复验证记录](superpowers/verification/2026-08-05-pdf-cold-font-timeout.md)。
 
 ## 2026-08-05 已发布：安全加固
 
