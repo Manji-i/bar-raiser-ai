@@ -2,7 +2,9 @@
 
 ## 当前部署检查点
 
-截至 2026-08-03 本次文档同步前，GitHub `origin/main` 为提交 `6e81b57`（`docs: document PDF export server footprint`），生产服务器代码为 `d97c450`（`docs: record text PDF production deployment`）；两者都包含首个文字型 PDF 生产代码提交 `109cb7e`。`6e81b57` 只更新文档，未再次部署，不影响线上功能版本。本次 `neat-freak` 同步产生的提交先保留在本地，推送或部署后再更新远端检查点。服务器直连 GitHub 不稳定，代码发布继续使用 Bundle 路径。
+截至 2026-08-05，安全加固已在本地分支 `codex/security-hardening` 完成，但尚未合并、推送或部署。下面的生产版本、PM2 状态和资源 hash 来自 2026-08-03 的最后一次已记录检查，本轮没有重新连接生产验证，不能把本地修复写成线上已生效。
+
+2026-08-03 的记录为：GitHub `origin/main` 是 `6e81b57`，生产服务器代码是 `d97c450`，两者都包含文字型 PDF 生产代码 `109cb7e`。服务器直连 GitHub 不稳定，后续代码发布继续优先使用 Bundle 路径；生产机 1.9 GB 且无 swap，禁止构建。
 
 - 线上地址：`https://evalbar.cn/`；Node 的 `127.0.0.1:3000` 仅供本机 Nginx 反代。
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
@@ -10,9 +12,9 @@
 - 当前首页资源：`/assets/index-BYxbUDod.js`
 - 2026-08-03 完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260803-162514`
 - 2026-08-03 静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260803-163237`
-- 分支与 worktree：仅保留 `main`；已完成的功能分支和对应 worktree 已删除
+- 本地安全分支：`codex/security-hardening`；worktree：`.worktrees/security-hardening`
 
-合并后的 `main` 在本地完成 55 项自动化测试、生产构建和 12 页 PDF 校验；生产服务器完成 `npm ci` 和 55 项测试。服务器因 1.9 GB 内存且无 swap，不再承担本次 Vite 构建，改为发布本地已验证的 `dist/`。发布后 PM2 为 `online`，首页返回 `200`，未认证报告接口返回 `401`，主资源、PDF Worker 和两份字体均返回 `200`。
+2026-08-03 版本曾完成 55 项测试和生产冒烟。本地安全分支在 2026-08-05 完成 86 项测试、生产构建及事务回滚的随机本机端口安全回归；这些结果只证明本地候选版本，不代表生产已更新。
 
 ## 已交付能力
 
@@ -39,14 +41,32 @@
 
 完整验证数据见[客户端文字型 PDF 导出验证记录](superpowers/verification/2026-08-03-client-side-text-pdf-export.md)。
 
+## 2026-08-05 本地完成：安全加固
+
+- Node 默认只监听 `127.0.0.1`；公开入口文档统一为 `https://evalbar.cn`。
+- 新密码使用 scrypt；历史 SHA-256 只读兼容且不改写。新 Token 仅存摘要、12 小时绝对过期；浏览器改用 HttpOnly/SameSite Cookie，不再把 Token 放入 `localStorage`。
+- 首用户不再自动成为管理员；管理员初始化只允许空 users 表，本轮未在现有数据上执行。
+- 注册、登录、集成 Token、反馈和分析增加进程内窗口额度；AI 增加用户小时/每日额度和单用户并发限制。
+- JSON、模型输入和 multipart 增加固定预算；超字段、超 200 KB 字段和超 10 MB 文件隔离请求均返回 `413`。
+- 反馈使用严格 Schema；历史异常反馈只在读取时安全归一化，数据库原值不变。
+- 两种 Prompt 增加不可信输入契约和输出校验；报告禁用 Markdown 图片、原始 HTML 和危险链接协议。
+- 移除宽松 CORS、Tailwind CDN、Google Fonts 和 import map；Tailwind/Inter 进入本地构建，并增加 CSP、HSTS、frame、MIME、Referrer、Permissions Policy。
+- 未知 `/api/*` 返回 JSON `404`，注册冲突不再暴露用户名或邮箱字段。
+
+完整提交、测试、隔离回归、残余风险和生产验收见[安全加固验证台账](superpowers/verification/2026-08-05-security-hardening.md)。
+
 ## 安全边界
 
-普通用户报告和简历的所有权由服务端校验，管理员能力也由服务端 `isAdmin` 校验。但当前角色锁定仍是客户端产品约束：登录/注册 API 不保存角色，token 也没有绑定角色；同一账号可以修改浏览器存储或直接构造 API 请求访问本人另一模式的数据。
+普通用户报告和简历的所有权由服务端校验，管理员能力由服务端 `isAdmin` 校验。角色锁定仍是客户端产品约束：登录/注册 API 不保存角色，Token 也没有绑定角色；同一账号可以直接构造 API 请求访问本人另一模式的数据。这不是跨账号越权，但若未来要求 Candidate/Recruiter 服务端强隔离，仍需升级 Token 角色绑定。
 
-服务端 token 绑定角色、密码哈希、token 过期、登录限流、管理员初始化和前端第三方依赖等风险统一在[未来需迭代内容](未来需迭代内容.md)维护。
+Prompt Injection 只能分层缓解；历史 SHA-256 密码哈希按“不改现有数据”要求保留；限流状态当前只在单个 Node 进程内。这三项是明确残余风险，不得写成彻底关闭。
 
 ## 尚未完成的生产验证
 
+- 安全分支尚未合并、推送或部署；生产仍可能存在本轮扫描的原攻击路径。
+- 未关闭云安全组/主机防火墙的公网 `3000/tcp`，未从外部确认域名/IP `:3000` 拒绝连接。
+- 未配置或验收 Nginx 安全头和 `client_max_body_size`，未检查真实 HTTPS CSP/Origin 行为。
+- 未验证旧会话失效、原账号重新登录、Cookie 属性和正常小文件上传。
 - 未创建合成生产账号并发起真实 Gemini / Doubao 分析请求。
 - 未使用两个合成账号验证跨账号简历下载一定被拒绝。
 - 未创建并删除合成 Candidate 报告验证附件物理清理。
@@ -55,18 +75,18 @@
 
 ## 当前技术债
 
-- `npm audit` 仍报告 2 个 high，均来自 React Router 的 RSC Action CSRF 公告 `GHSA-qwww-vcr4-c8h2`；当前应用使用 `BrowserRouter`，未使用 RSC API，因此现有架构不受该攻击路径影响。继续按风险登记跟踪，不运行破坏性的自动修复。
-- Tailwind 和网页 Inter 字体仍依赖第三方 CDN；PDF 导出已移除 `html2pdf` CDN，PDF Worker 与 Noto Sans SC 字体已自托管；尚未建立严格 CSP，静态资源也尚未配置长期缓存。
-- Vite 构建仍提示主 bundle 超过默认 500 kB；Tailwind CDN 和错误设置 `NODE_ENV=production` 也会产生已知提示。
+- `npm audit` 仍报告 2 个 high，均来自 React Router RSC Action 公告 `GHSA-qwww-vcr4-c8h2`；当前只使用 `BrowserRouter`，未使用 RSC/Action API。npm 当前最新 `react-router-dom` 为 7.18.2，官方修复标记为尚不可用的 8.3.0；继续观察，不运行 `npm audit fix --force`。
+- Vite 构建仍提示主 bundle 超过默认 500 kB；环境模板中的 `NODE_ENV=production` 仍产生已知提示。
 - 生产服务器只有 1.9 GB 内存且没有 swap，直接执行 Vite 构建会耗尽资源；后续发布必须在本地或 CI 完成构建并上传已验证的 `dist/`。只有扩容或增加 swap 并重新验证后，才可调整该规则。
 - 简历首版没有 OCR、病毒扫描或自动重解析。
 
 ## 下一步优先级
 
-1. 用户量、企业客户或合规要求上升前，把角色升级为服务端 token 绑定并同步修复认证风险。
-2. 用获批的合成账号完成真实 AI、跨账号附件权限和删除清理三项生产验收。
-3. 将第三方前端运行时依赖纳入构建，增加 CSP，并拆分大 bundle。
-4. 持续跟踪 React Router 公告；采用 RSC 前或官方提供兼容修复后重新评估升级。
+1. 获得生产变更授权后，先备份完整 `data/`，在本地构建并校验 `dist/`，再通过 Bundle/暂存目录更新代码和运行时依赖；生产机不构建。
+2. 重启 PM2；配置并验收 Nginx 安全头与请求体上限；关闭安全组/防火墙公网 `3000/tcp`，从外部完成 SEC-01/07/08/09 复测。
+3. 验证旧会话失效、原账号重新登录和正常页面/小文件上传。不得在现有库运行 `admin:bootstrap`。
+4. 真实 AI、注册、反馈、报告创建/删除和跨账号附件测试继续单独申请数据与费用授权。
+5. 多实例部署前迁移共享限流；未来获批时处理历史密码迁移和服务端角色绑定；持续跟踪 React Router 公告。
 
 ## 权威文档
 

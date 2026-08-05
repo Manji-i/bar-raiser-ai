@@ -29,7 +29,7 @@ npm run build
 - 部署来源是明确的本地 `main` 提交。
 - 没有把 `.env*`、`data/`、候选人材料或原型文件纳入提交。
 - 当前 55 个自动化测试全部通过；新增测试后以实际总数为准。
-- 生产构建成功。Tailwind CDN、大 chunk 和 Vite 对 `.env` 中 `NODE_ENV=production` 的提示是当前已知警告，不等于构建失败；不要在 `.env` 中设置该值。
+- 生产构建成功。Tailwind 和 Inter 已进入本地构建；大 chunk 和 Vite 对 `.env` 中 `NODE_ENV=production` 的提示是当前已知警告，不等于构建失败；不要在 `.env` 中设置该值。
 - 构建在本地或 CI 完成并生成待发布的 `dist/`；1.9 GB、无 swap 的生产主机不得执行 `npm run build`。
 
 ## 3. 数据备份

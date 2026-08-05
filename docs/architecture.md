@@ -29,7 +29,7 @@ flowchart LR
   Attachments -->|受保护下载| UI
 ```
 
-前端开发环境由 `scripts/dev.mjs` 同时启动 Vite 和 Express；生产环境由 Express 在 3000 端口同时托管 `dist/` 与 `/api/*`。
+前端开发环境由 `scripts/dev.mjs` 同时启动 Vite 和 Express；生产环境由 Express 在 `127.0.0.1:3000` 同时托管 `dist/` 与 `/api/*`，只允许同机 Nginx 反代，对外入口是 `https://evalbar.cn`。Docker 场景通过显式 `HOST=0.0.0.0` 保持端口映射能力。
 
 ## 3. 前端路由
 
@@ -108,13 +108,29 @@ PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和�
 | `services/reportService.js` | 报告查询、模式过滤、事务写入和权限校验 |
 | `services/reportAttachmentService.js` | 简历校验、随机路径保存、解析状态和文件清理 |
 | `services/userService.js` | 用户、token 与管理员身份 |
+| `services/passwordService.js` | scrypt 新密码与旧 SHA-256 只读兼容校验 |
+| `services/sessionToken.js` | 随机会话 Token、摘要存储和 12 小时绝对过期 |
+| `services/authSession.js` | HttpOnly Cookie 与受控 Bearer Token 提取 |
+| `services/adminBootstrapService.js` | 仅空 users 表可执行的管理员初始化事务 |
 | `services/requestGuards.js` | 单进程请求窗口额度与分析并发保护 |
+| `services/feedbackValidation.js` | 新反馈 Schema 和两种模式问题标签单一来源 |
+| `services/promptSecurity.js` | 不可信输入安全契约与模型输出边界 |
+| `services/httpSecurity.js` | CSP/HSTS 等响应头和 Origin 白名单 |
 
 ### 5.1 请求额度
 
 服务端对注册、登录、集成 Token、反馈和 AI 分析设置固定窗口额度；AI 分析同时按 IP、用户小时、用户每日计数，并限制同一用户只有一个请求在途。超出窗口额度返回 `429 RATE_LIMITED`，并发冲突返回 `429 ANALYSIS_IN_PROGRESS`，均发生在调用 AI Provider 之前。
 
 当前额度保存在 Node.js 进程内存中，PM2 重启会重置计数。若以后启用 cluster 或多实例部署，必须先把计数和并发锁迁移到 Redis 等共享存储，否则各实例会分别计算额度。
+
+### 5.2 认证与 HTTP 边界
+
+- 新密码使用随机盐 scrypt，长度 10–128；历史 SHA-256 哈希只在登录时兼容读取，不自动改写数据库。
+- 新 Token 只在响应端短暂出现，数据库保存 SHA-256 摘要；浏览器使用 `HttpOnly`、`SameSite=Strict` Cookie，生产 HTTPS 下同时设置 `Secure`，绝对有效期 12 小时。
+- 浏览器不在 `localStorage` 保存 Token。非浏览器集成需显式调用 `/api/auth/token`，Bearer Token 与 Cookie 使用同一过期和摘要校验。
+- 注册不会自动授予管理员；`npm run admin:bootstrap` 只允许真正空的 users 表，现有生产库不得运行。
+- 所有响应设置 CSP、HSTS、点击劫持、MIME、Referrer 和 Permissions Policy；非安全方法若携带 Origin，必须命中正式域名或本地开发白名单。
+- 未知 `/api/*` 始终返回 JSON `404`，不会回退为 SPA HTML。
 
 ## 6. 数据模型
 
@@ -166,7 +182,7 @@ data/uploads/resumes/<user-id>/<random-id>.<ext>
 
 ## 8. Prompt 与材料边界
 
-用户提供的 JD、简历和面试记录全部视为不可信数据，不允许覆盖 System Prompt。`analysisRequest.js` 使用 JSON 序列化并转义标签字符，避免材料通过字符串拼接伪装成指令。
+用户提供的 JD、简历和面试记录全部视为不可信数据，不允许覆盖 System Prompt。`analysisRequest.js` 使用 JSON 序列化并转义标签字符，避免材料通过字符串拼接伪装成指令。Candidate 与 Recruiter 的数据库 Prompt 在调用前都会追加幂等的 `prompt-security-v1` 契约；模型输出必须是 1–100000 字符且至少包含 Markdown 二级标题，否则不保存报告。
 
 Candidate Prompt 的稳定边界：
 
@@ -177,6 +193,8 @@ Candidate Prompt 的稳定边界：
 - 报告目标长度 1500–2200 个中文字符。
 - “本场表现结论”只包含一句话总结、本场重点、下次准备三个独立段落，每段一句。
 - 运行时通过 `candidate-conclusion-v2` 契约兼容数据库中的旧 Candidate Prompt，不需要 schema 或 Prompt 数据迁移。
+
+报告 Markdown 不启用原始 HTML；图片节点不渲染，链接只允许同站相对路径、锚点、`http:`、`https:` 和 `mailto:`，危险协议降级为纯文本。Prompt Injection 仍是概率性模型风险，这些措施是分层缓解，不代表模型绝对不受恶意语义影响。
 
 ## 9. 兼容与失败处理
 
@@ -197,4 +215,4 @@ npm test
 npm run build
 ```
 
-生产冒烟见 [operator-runbook.md](operator-runbook.md)，接口示例见 [integration-guide.md](integration-guide.md)。
+本轮安全验证与未完成的生产闭环见[2026-08-05 安全加固验证台账](superpowers/verification/2026-08-05-security-hardening.md)。生产冒烟见 [operator-runbook.md](operator-runbook.md)，接口示例见 [integration-guide.md](integration-guide.md)。
