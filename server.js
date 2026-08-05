@@ -30,6 +30,10 @@ import {
   extractSessionToken,
 } from './services/authSession.js';
 import { SESSION_TTL_MS } from './services/sessionToken.js';
+import {
+  createConcurrencyGuard,
+  createWindowGuard,
+} from './services/requestGuards.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -45,6 +49,52 @@ app.set('trust proxy', 'loopback');
 app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
+
+const requestLimits = {
+  registerIp: createWindowGuard({ windowMs: 60 * 60 * 1000, max: 5 }),
+  loginIp: createWindowGuard({ windowMs: 15 * 60 * 1000, max: 20 }),
+  loginUser: createWindowGuard({ windowMs: 15 * 60 * 1000, max: 5 }),
+  feedbackUser: createWindowGuard({ windowMs: 60 * 60 * 1000, max: 30 }),
+  analyzeIp: createWindowGuard({ windowMs: 60 * 60 * 1000, max: 60 }),
+  analyzeUser: createWindowGuard({ windowMs: 60 * 60 * 1000, max: 20 }),
+  analyzeDailyUser: createWindowGuard({ windowMs: 24 * 60 * 60 * 1000, max: 50 }),
+};
+const analysisConcurrency = createConcurrencyGuard({ max: 1 });
+
+const requestIp = (req) => String(req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 256);
+const loginUsername = (req) => {
+  const normalized = String(req.body?.username ?? '').trim().toLowerCase();
+  return (normalized || '<missing>').slice(0, 256);
+};
+const rejectRateLimited = (res, result) => {
+  res.set('Retry-After', String(Math.max(1, Math.ceil(result.retryAfterMs / 1000))));
+  return res.status(429).json({ error: 'Too many requests', code: 'RATE_LIMITED' });
+};
+const consumeLimit = (guard, key, res) => {
+  const result = guard.consume(key);
+  if (result.allowed) return true;
+  rejectRateLimited(res, result);
+  return false;
+};
+const limitRegistration = (req, res, next) => {
+  if (!consumeLimit(requestLimits.registerIp, requestIp(req), res)) return;
+  next();
+};
+const limitLogin = (req, res, next) => {
+  if (!consumeLimit(requestLimits.loginIp, requestIp(req), res)) return;
+  if (!consumeLimit(requestLimits.loginUser, loginUsername(req), res)) return;
+  next();
+};
+const limitFeedback = (req, res, next) => {
+  if (!consumeLimit(requestLimits.feedbackUser, req.user.id, res)) return;
+  next();
+};
+const limitAnalysis = (req, res, next) => {
+  if (!consumeLimit(requestLimits.analyzeIp, requestIp(req), res)) return;
+  if (!consumeLimit(requestLimits.analyzeUser, req.user.id, res)) return;
+  if (!consumeLimit(requestLimits.analyzeDailyUser, req.user.id, res)) return;
+  next();
+};
 
 // 认证中间件
 const authenticate = (req, res, next) => {
@@ -147,7 +197,7 @@ const setSessionCookie = (req, res, token) => {
   res.cookie(SESSION_COOKIE_NAME, token, cookieOptions(req.secure));
 };
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', limitRegistration, async (req, res) => {
   try {
     const { username, password, email } = req.body;
     
@@ -163,7 +213,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', limitLogin, async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -179,7 +229,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/token', async (req, res) => {
+app.post('/api/auth/token', limitLogin, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -211,7 +261,7 @@ app.get('/api/auth/me', authenticate, (req, res) => {
 });
 
 // Analyze Interview (需要认证)
-app.post('/api/analyze', authenticate, uploadResume, async (req, res) => {
+app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, res) => {
   console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${AI_PROVIDER}`);
   try {
     const analysisMode = validateAnalysisRequest(req.body);
@@ -239,6 +289,15 @@ app.post('/api/analyze', authenticate, uploadResume, async (req, res) => {
     const systemPrompt = analysisMode === 'candidate'
       ? applyCandidateConclusionContract(storedPrompt)
       : storedPrompt;
+    const releaseAnalysis = analysisConcurrency.acquire(req.user.id);
+    if (!releaseAnalysis) {
+      return res.status(429).json({
+        error: 'Analysis already in progress',
+        code: 'ANALYSIS_IN_PROGRESS',
+      });
+    }
+    res.once('finish', releaseAnalysis);
+    res.once('close', releaseAnalysis);
     const resultText = await runAiAnalysis(systemPrompt, inputContent);
 
     if (!resultText) {
@@ -359,7 +418,7 @@ app.get('/api/admin/reports', authenticate, requireAdmin, (req, res) => {
 });
 
 // Feedback Endpoints (需要认证)
-app.post('/api/feedback', authenticate, (req, res) => {
+app.post('/api/feedback', authenticate, limitFeedback, (req, res) => {
   try {
     const { reportId, rating, comments, specificIssues } = req.body;
     

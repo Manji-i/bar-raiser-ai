@@ -15,7 +15,8 @@ Eval Bar AI 在同一套认证、AI Provider 和报告存储之上提供两种�
 
 ```mermaid
 flowchart LR
-  Browser["React / Vite 前端"] -->|Bearer token| Express["Express API"]
+  Browser["React / Vite 前端"] -->|HttpOnly Cookie| Express["Express API"]
+  Integration["受控集成客户端"] -->|Bearer token| Express
   Express --> Auth["认证与权限"]
   Express --> Router["analysisMode 分流"]
   Router --> CandidatePrompt["Candidate Prompt"]
@@ -44,7 +45,7 @@ flowchart LR
 | `/report/:id` | 登录 | 报告模式必须与登录角色一致；不一致时返回当前角色历史并提示 |
 | `/admin` | 管理员 | 报告、反馈与两套 Prompt 管理 |
 
-`src/context/AuthContext.tsx` 负责认证与角色的共同生命周期；只有 token、用户和合法角色同时存在时才恢复会话。`services/analysisMode.ts` 提供严格角色存储、登录前角色意图、路由决策和报告模式判断。非法或不匹配模式不会进入业务组件。
+`src/context/AuthContext.tsx` 负责认证与角色的共同生命周期；浏览器通过 HttpOnly Cookie 恢复服务端会话，本地只保存合法角色。`services/analysisMode.ts` 提供严格角色存储、登录前角色意图、路由决策和报告模式判断。非法或不匹配模式不会进入业务组件。非浏览器集成必须显式调用 `/api/auth/token` 获取 Bearer Token。
 
 ## 4. 分析数据流
 
@@ -107,6 +108,13 @@ PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和�
 | `services/reportService.js` | 报告查询、模式过滤、事务写入和权限校验 |
 | `services/reportAttachmentService.js` | 简历校验、随机路径保存、解析状态和文件清理 |
 | `services/userService.js` | 用户、token 与管理员身份 |
+| `services/requestGuards.js` | 单进程请求窗口额度与分析并发保护 |
+
+### 5.1 请求额度
+
+服务端对注册、登录、集成 Token、反馈和 AI 分析设置固定窗口额度；AI 分析同时按 IP、用户小时、用户每日计数，并限制同一用户只有一个请求在途。超出窗口额度返回 `429 RATE_LIMITED`，并发冲突返回 `429 ANALYSIS_IN_PROGRESS`，均发生在调用 AI Provider 之前。
+
+当前额度保存在 Node.js 进程内存中，PM2 重启会重置计数。若以后启用 cluster 或多实例部署，必须先把计数和并发锁迁移到 Redis 等共享存储，否则各实例会分别计算额度。
 
 ## 6. 数据模型
 
