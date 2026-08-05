@@ -2,19 +2,18 @@
 
 ## 当前部署检查点
 
-截至 2026-08-05，安全加固已在本地分支 `codex/security-hardening` 完成，但尚未合并、推送或部署。下面的生产版本、PM2 状态和资源 hash 来自 2026-08-03 的最后一次已记录检查，本轮没有重新连接生产验证，不能把本地修复写成线上已生效。
-
-2026-08-03 的记录为：GitHub `origin/main` 是 `6e81b57`，生产服务器代码是 `d97c450`，两者都包含文字型 PDF 生产代码 `109cb7e`。服务器直连 GitHub 不稳定，后续代码发布继续优先使用 Bundle 路径；生产机 1.9 GB 且无 swap，禁止构建。
+截至 2026-08-05，安全加固已合并到 `main`、推送 GitHub，并通过 Bundle 与本地构建产物部署生产。生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
 
 - 线上地址：`https://evalbar.cn/`；Node 的 `127.0.0.1:3000` 仅供本机 Nginx 反代。
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
-- 当前首页资源：`/assets/index-BYxbUDod.js`
-- 2026-08-03 完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260803-162514`
-- 2026-08-03 静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260803-163237`
-- 本地安全分支：`codex/security-hardening`；worktree：`.worktrees/security-hardening`
+- 已部署安全代码：`9ff2c5971cb72b6563d579d0d2578de90bfea7d0`
+- 当前首页资源：`/assets/index-Dvf2D7pn.js`、`/assets/index-DZT1nRDZ.css`
+- 2026-08-05 完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-154223`
+- 2026-08-05 静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260805-154333`
+- 2026-08-05 Nginx 配置备份：`/root/bar-raiser-ai-backups/evalbar.nginx-before-20260805-154321`
 
-2026-08-03 版本曾完成 55 项测试和生产冒烟。本地安全分支在 2026-08-05 完成 86 项测试、生产构建及事务回滚的随机本机端口安全回归；这些结果只证明本地候选版本，不代表生产已更新。
+安全版本在本地和生产分别完成 86 项测试；生产外部验收确认 HTTPS 200、HTTP 301、Node 仅监听回环地址、公网 3000 拒绝连接、安全响应头生效、恶意 Origin 被拒绝，且线上 `dist` 与本地验证产物的全文件清单哈希一致。
 
 ## 已交付能力
 
@@ -41,7 +40,7 @@
 
 完整验证数据见[客户端文字型 PDF 导出验证记录](superpowers/verification/2026-08-03-client-side-text-pdf-export.md)。
 
-## 2026-08-05 本地完成：安全加固
+## 2026-08-05 已发布：安全加固
 
 - Node 默认只监听 `127.0.0.1`；公开入口文档统一为 `https://evalbar.cn`。
 - 新密码使用 scrypt；历史 SHA-256 只读兼容且不改写。新 Token 仅存摘要、12 小时绝对过期；浏览器改用 HttpOnly/SameSite Cookie，不再把 Token 放入 `localStorage`。
@@ -61,11 +60,8 @@
 
 Prompt Injection 只能分层缓解；历史 SHA-256 密码哈希按“不改现有数据”要求保留；限流状态当前只在单个 Node 进程内。这三项是明确残余风险，不得写成彻底关闭。
 
-## 尚未完成的生产验证
+## 尚未完成的授权型生产验证
 
-- 安全分支尚未合并、推送或部署；生产仍可能存在本轮扫描的原攻击路径。
-- 未关闭云安全组/主机防火墙的公网 `3000/tcp`，未从外部确认域名/IP `:3000` 拒绝连接。
-- 未配置或验收 Nginx 安全头和 `client_max_body_size`，未检查真实 HTTPS CSP/Origin 行为。
 - 未验证旧会话失效、原账号重新登录、Cookie 属性和正常小文件上传。
 - 未创建合成生产账号并发起真实 Gemini / Doubao 分析请求。
 - 未使用两个合成账号验证跨账号简历下载一定被拒绝。
@@ -82,11 +78,10 @@ Prompt Injection 只能分层缓解；历史 SHA-256 密码哈希按“不改现
 
 ## 下一步优先级
 
-1. 获得生产变更授权后，先备份完整 `data/`，在本地构建并校验 `dist/`，再通过 Bundle/暂存目录更新代码和运行时依赖；生产机不构建。
-2. 重启 PM2；配置并验收 Nginx 安全头与请求体上限；关闭安全组/防火墙公网 `3000/tcp`，从外部完成 SEC-01/07/08/09 复测。
-3. 验证旧会话失效、原账号重新登录和正常页面/小文件上传。不得在现有库运行 `admin:bootstrap`。
-4. 真实 AI、注册、反馈、报告创建/删除和跨账号附件测试继续单独申请数据与费用授权。
-5. 多实例部署前迁移共享限流；未来获批时处理历史密码迁移和服务端角色绑定；持续跟踪 React Router 公告。
+1. 使用获批测试账号验证旧会话失效、重新登录、Cookie 属性和正常页面/小文件上传；不得在现有库运行 `admin:bootstrap`。
+2. 真实 AI、注册、反馈、报告创建/删除和跨账号附件测试继续单独申请数据与费用授权。
+3. 在云控制台持续确认安全组只开放 22/80/443；虽然应用已仅监听回环地址，仍建议增加网络层纵深防御。
+4. 多实例部署前迁移共享限流；未来获批时处理历史密码迁移和服务端角色绑定；持续跟踪 React Router 公告。
 
 ## 权威文档
 

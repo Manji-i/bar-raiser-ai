@@ -2,9 +2,9 @@
 
 ## 1. 验证结论
 
-本次在 `codex/security-hardening` 隔离 worktree 完成代码、自动化测试、生产构建和本机随机端口 HTTP 回归。未连接生产 AI，未读取候选人材料，未修改生产配置，也未对现有用户、报告、反馈、附件或 Prompt 执行 `UPDATE`、`DELETE`、迁移或清理。
+本次在 `codex/security-hardening` 隔离 worktree 完成代码、自动化测试、生产构建和本机随机端口 HTTP 回归，并于 2026-08-05 合并、推送和部署到 `https://evalbar.cn/`。部署前完整备份生产 `data/`，生产机未执行构建；未连接生产 AI，未读取候选人材料，也未对现有用户、报告、反馈、附件或 Prompt 执行 `UPDATE`、`DELETE`、迁移或清理。
 
-当前不能把全部漏洞标记为“已关闭”：SEC-01、SEC-07、SEC-08、SEC-09 仍需要发布、Nginx/防火墙配置和外部复测。其余项目仅达到“本地验证通过”，生产尚未部署。
+SEC-01、SEC-07、SEC-08、SEC-09 已完成生产配置和外部无写入复测；其余项目保持“本地验证通过”，需要账号、文件或 AI 调用的生产验证未在本次授权范围内执行。
 
 ## 2. 实施提交
 
@@ -24,20 +24,20 @@
 
 | 编号 | 关联提交 | 自动化测试 | 隔离复测 | 生产验证 | 状态 | 残余风险 |
 |---|---|---|---|---|---|---|
-| SEC-01 | `4f0b1c5` | 默认 `127.0.0.1`、显式 `HOST` 覆盖和文档 HTTPS 静态测试通过 | 未对生产端口重复探测 | 未执行：需部署并从外部确认域名/IP `:3000` 拒绝连接、80 只跳转 443 | 待生产验证 | Docker 必须显式 `HOST=0.0.0.0`；防火墙/安全组不在代码控制范围 |
+| SEC-01 | `4f0b1c5` | 默认 `127.0.0.1`、显式 `HOST` 覆盖和文档 HTTPS 静态测试通过 | 本机随机端口验证应用可仅监听回环地址 | PM2 `online`；`ss` 仅见 `127.0.0.1:3000`；外部 IP `:3000` 拒绝连接；80 返回 301 到 HTTPS | 生产验证通过 | 主机 UFW 当前未启用，但 3000 无公网监听；Docker 必须显式 `HOST=0.0.0.0`，云安全组仍需持续保持最小开放面 |
 | SEC-02 | `ac1c211`、`a1dbabd` | 窗口额度、恢复、并发释放、输入预算测试通过 | 随机本机端口：第 6 次注册和第 21 次分析均为 `429`；分析使用缺失字段，AI 执行数为 0 | 未执行：需受控低频/突发验证并确认供应商预算告警 | 本地验证通过 | 额度在单个 Node 进程内，重启重置；多实例前必须迁移共享存储 |
 | SEC-03 | `2981b41`、`659949f`、`da9a70d` | scrypt、新旧哈希兼容、Token 摘要/12 小时过期、Cookie 属性、前端无 Token 存储测试通过 | 1 位密码注册 `400`；旧明文 Token 和 13 小时 Token 均为 `401`；事务回滚后用户行数不变 | 未执行：部署后旧会话应 `401`，原账号重新登录并检查 Cookie | 本地验证通过，残余风险已记录 | 数据库中的历史无盐 SHA-256 密码哈希按“不改现有数据”要求保留；只有主动改密或未来获批迁移后消除 |
 | SEC-04 | `659949f` | 空库首注册为普通用户；空库 bootstrap 成功、非空库失败关闭 | HTTP 首注册响应 `isAdmin=false`；测试事务回滚 | 未执行：只读确认现有管理员未改变；生产不得运行 bootstrap | 本地验证通过 | 初始化脚本依赖运维在真正空库中一次性执行，不能替代权限审计 |
 | SEC-05 | `edf9ace` | 不可信输入契约幂等、输出长度/Markdown 标题、危险 URL 和图片禁用测试通过 | 恶意文本仍位于 `<input_json>`；`javascript:`/`data:` 返回空，Markdown 图片组件不渲染 | 未执行：只用离线报告夹具观察浏览器网络，不调用真实 AI | 本地验证通过，残余风险已记录 | Prompt Injection 是概率性模型风险，只能通过系统契约、结构化输入、输出校验和渲染隔离分层缓解 |
 | SEC-06 | `8b9237a` | 评分、评论、标签白名单/数量测试；历史异常值归一化且原值保持测试通过 | `rating=999`/字符串 issues 返回 `400 INVALID_FEEDBACK`；历史 `rating=999` 仅响应归一为 0，数据库仍为 999 | 未执行：合法反馈和管理员页需用获批合成报告验收 | 本地验证通过 | 历史异常反馈原值按要求保留，不自动修复 |
-| SEC-07 | `b8fa4d9` | CSP、HSTS、frame、nosniff、Referrer Policy 测试；构建入口无 CDN/import map | `npm run build` 产物只引用本地 JS/CSS/字体 | 未执行：需检查真实 HTTPS 响应头、CSP 控制台和页面主流程 | 待生产验证 | Nginx 可能覆盖/重复响应头；必须以外部响应为准 |
-| SEC-08 | `a1dbabd`、`ac1c211` | JSON 512 KB、字段字符预算及 Multer files/fields/parts/fieldSize/fileSize 测试通过 | 超 7 字段、超 200 KB 字段、超 10 MB 文件均返回 `413`，事务回滚 | 未执行：需配置 Nginx `client_max_body_size`，只做边界请求，不做生产压力测试 | 待生产验证 | Node 仍采用内存上传；反向代理上限和并发容量必须共同约束 |
-| SEC-09 | `b8fa4d9` | Origin 白名单及无 `cors` 依赖/通配符测试通过 | `https://evil.example` 写请求为 `403 ORIGIN_NOT_ALLOWED`，无 ACAO；未知预检不获跨域许可 | 未执行：外部恶意 Origin 不得获得 ACAO，两个正式域名写请求需正常 | 待生产验证 | 无 Origin 的受控集成继续允许 Bearer Token，需保护集成凭据 |
-| SEC-10 | `4f0b1c5`、`b8fa4d9` | HTTPS 文档、API JSON 回退、注册模糊错误静态测试通过 | 重复注册只返回 `Registration failed`；未知 `/api/*` 返回 JSON `404 API_NOT_FOUND` | 未执行：部署后从公网复核未知 API、注册错误和规范域名 | 本地验证通过 | 注册接口仍会表达“注册成功/失败”这一产品必需结果，不构成完全隐藏账号可用性的证明 |
+| SEC-07 | `b8fa4d9` | CSP、HSTS、frame、nosniff、Referrer Policy 测试；构建入口无 CDN/import map | `npm run build` 产物只引用本地 JS/CSS/字体 | HTTPS 外部响应包含 CSP、HSTS、DENY、nosniff、Referrer 与 Permissions Policy；无 `X-Powered-By`、通配 CORS 或 CDN 引用 | 生产验证通过 | 页面主流程和 CSP 控制台仍需登录态人工回归 |
+| SEC-08 | `a1dbabd`、`ac1c211` | JSON 512 KB、字段字符预算及 Multer files/fields/parts/fieldSize/fileSize 测试通过 | 超 7 字段、超 200 KB 字段、超 10 MB 文件均返回 `413`，事务回滚 | Nginx `client_max_body_size 12M`，配置测试通过并 reload；未向生产发送大文件或压力流量 | 生产配置验证通过 | Node 仍采用内存上传；反向代理上限和并发容量必须共同约束 |
+| SEC-09 | `b8fa4d9` | Origin 白名单及无 `cors` 依赖/通配符测试通过 | `https://evil.example` 写请求为 `403 ORIGIN_NOT_ALLOWED`，无 ACAO；未知预检不获跨域许可 | 从生产本机向注册写接口发送 `Origin: https://attacker.example` 返回 `403`；HTTPS 响应无 ACAO | 生产验证通过 | 无 Origin 的受控集成继续允许 Bearer Token，需保护集成凭据；正式域名登录仍需账号回归 |
+| SEC-10 | `4f0b1c5`、`b8fa4d9` | HTTPS 文档、API JSON 回退、注册模糊错误静态测试通过 | 重复注册只返回 `Registration failed`；未知 `/api/*` 返回 JSON `404 API_NOT_FOUND` | 生产未知 `/api/*` 返回 JSON 404，公开入口仅 HTTPS，HTTP 统一跳转 | 生产验证通过 | 注册接口仍会表达“注册成功/失败”这一产品必需结果，不构成完全隐藏账号可用性的证明 |
 
 ## 4. 自动化与构建证据
 
-2026-08-05 在隔离 worktree 执行：
+2026-08-05 在隔离 worktree 和合并后的 `main` 执行：
 
 ```bash
 npm test
@@ -96,12 +96,12 @@ isolated database rollback=true
 
 官方公告：<https://github.com/advisories/GHSA-qwww-vcr4-c8h2>
 
-## 8. 生产闭环清单（尚未授权执行）
+## 8. 生产部署与闭环记录
 
-1. 在本地/CI 保留已验证 `dist/`，记录 SHA-256；生产机禁止构建。
-2. 先备份完整 `data/`，再通过 Bundle/暂存目录更新后端代码、运行时依赖和构建产物，校验后原子替换。
-3. 重启 PM2；预期旧会话失效，用户需要重新登录。不得运行 `admin:bootstrap`。
-4. Nginx 增加与应用一致的安全头和请求体上限，`nginx -t` 通过后 reload。
-5. 云安全组和主机防火墙关闭公网 `3000/tcp`，仅保留 Nginx 到 `127.0.0.1:3000`。
-6. 从外部验证 80→443、HTTPS 响应头、`evalbar.cn:3000`/IP`:3000` 拒绝、恶意 Origin 无 ACAO、未知 API JSON 404、正常登录/页面/小文件上传。
-7. 真实 AI、生产注册、反馈、报告创建/删除和跨账号附件测试仍需单独的数据与费用授权。
+1. GitHub `main` 与生产代码先部署到 `9ff2c5971cb72b6563d579d0d2578de90bfea7d0`；使用本地验证后的 `dist`，生产机未构建。
+2. 生产 `data/` 完整备份为 `/root/bar-raiser-ai-backups/data-before-20260805-154223`，权限收紧；部署过程未运行 schema 迁移或管理员 bootstrap。
+3. 生产安装运行依赖并执行 `npm test`：86 项通过，0 失败；随后原子替换 `dist`，旧产物备份为 `/root/bar-raiser-ai-backups/dist-before-20260805-154333`。
+4. Nginx `client_max_body_size` 调整为 `12M`，`nginx -t` 通过并 reload；原配置备份为 `/root/bar-raiser-ai-backups/evalbar.nginx-before-20260805-154321`。
+5. PM2 重启后 `online`，Node 仅监听 `127.0.0.1:3000`；外部访问公网 IP `:3000` 拒绝连接。
+6. 外部验证：HTTPS 200，HTTP 301 到 HTTPS；安全响应头完整；未知 API 为 JSON 404；恶意 Origin 写请求为 403；本地与生产 `dist` 全文件清单 SHA-256 为 `07082225a96db18215d6b1340840c5eaf731f75928b215627e3bb66a83897b78`。
+7. 未执行登录、上传、生产注册、反馈、报告创建/删除、跨账号附件或真实 AI；这些仍需单独的数据与费用授权。
