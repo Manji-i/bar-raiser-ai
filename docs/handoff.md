@@ -2,13 +2,16 @@
 
 ## 当前部署检查点
 
-截至 2026-08-05，PDF 冷启动导出修复已合并到 `main`、推送 GitHub，并通过 Bundle 与本地构建产物部署生产。生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
+截至 2026-08-05，DeepSeek V4 Flash 与分析超时修复已通过 Bundle 和本地构建产物部署生产；该提交尚未推送 GitHub。生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
 
 - 线上地址：`https://evalbar.cn/`；Node 的 `127.0.0.1:3000` 仅供本机 Nginx 反代。
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
-- 当前生产代码：`55921f7020d1c9a4cc07e2c3a0d526ed1bab4574`
-- 当前首页资源：`/assets/index-HWNnjYkV.js`、`/assets/index-DZT1nRDZ.css`
+- 当前生产代码：`c8950307fd22c704d3f76503dabef69bd5accdea`
+- 当前首页资源：`/assets/index-CH85fL1J.js`、`/assets/index-DZT1nRDZ.css`
+- 2026-08-05 DeepSeek 发布前数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-185421`
+- 2026-08-05 DeepSeek 发布前环境配置备份：`/root/bar-raiser-ai-backups/env-local-before-20260805-185421`
+- 2026-08-05 DeepSeek 发布前 Nginx 配置备份：`/root/bar-raiser-ai-backups/evalbar-nginx-before-20260805-185421`
 - 2026-08-05 PDF 修复前完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-161503`
 - 2026-08-05 PDF 修复前静态资源备份：`/root/bar-raiser-ai-backups/dist-before-20260805-161541`
 - 2026-08-05 完整数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-154223`
@@ -16,6 +19,18 @@
 - 2026-08-05 Nginx 配置备份：`/root/bar-raiser-ai-backups/evalbar.nginx-before-20260805-154321`
 
 安全版本在本地和生产分别完成 86 项测试；生产外部验收确认 HTTPS 200、HTTP 301、Node 仅监听回环地址、公网 3000 拒绝连接、安全响应头生效、恶意 Origin 被拒绝，且线上 `dist` 与本地验证产物的全文件清单哈希一致。
+
+## 2026-08-05 已发布：DeepSeek V4 Flash 与分析超时修复
+
+- 生产 Provider 切换为 `deepseek-v4-flash`，显式启用思考模式和 `high` 思考强度。
+- 应用 SDK 最长等待 600 秒且不自动重试；Nginx 仅对 `/api/analyze` 设置 660 秒读写超时，避免此前默认 60 秒提前返回 504。
+- 客户端提前断开会取消仍在途的 DeepSeek 请求，并发锁在上游 Promise 结束后释放。
+- 每次模型调用结束写一条 `analysis_completed` JSON 日志，记录模式、Provider、模型、状态、耗时和输入输出字符数，不记录用户 ID 或候选人材料。
+- 前端按稳定错误码展示超时、繁忙、限流和并发冲突提示，不再直接展示 Nginx 的 `HTTP status: 504`。
+- 本地 100 项测试通过，生产构建成功；生产 `dist` 与本地全文件内容清单哈希一致，PM2 和 Nginx 均在线。
+- 本次未发起真实生产分析，因此首条耗时日志要等真实用户分析结束后产生；历史报告没有开始时间，无法反推历史平均耗时。
+
+完整配置、验证证据和备份路径见[DeepSeek V4 Flash 与分析超时修复验证记录](superpowers/verification/2026-08-05-deepseek-timeout-deployment.md)。
 
 ## 已交付能力
 
