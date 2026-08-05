@@ -42,6 +42,11 @@ import {
   isAllowedOrigin,
 } from './services/httpSecurity.js';
 import { createAiService } from './services/aiService.js';
+import { createAnalysisTelemetry } from './services/analysisTelemetry.js';
+import {
+  bindClientDisconnect,
+  executeAnalysis,
+} from './services/analysisExecution.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -269,6 +274,7 @@ app.get('/api/auth/me', authenticate, (req, res) => {
 // Analyze Interview (需要认证)
 app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, res) => {
   console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${aiService.provider}`);
+  let disconnectController = null;
   try {
     const analysisMode = validateAnalysisRequest(req.body);
     const resumeParseStatus = req.body.resumeParseStatus || (req.file ? null : 'not_provided');
@@ -303,53 +309,74 @@ app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, 
         code: 'ANALYSIS_IN_PROGRESS',
       });
     }
-    res.once('finish', releaseAnalysis);
-    res.once('close', releaseAnalysis);
-    const resultText = validateAnalysisOutput(
-      await aiService.runAnalysis({ systemPrompt, inputContent }),
-    );
-
-    const reportId = uuidv4();
-    let attachment = null;
-    try {
-      if (req.file) {
-        attachment = await reportAttachmentService.saveResumeFile({
-          userId: req.user.id,
-          reportId,
-          file: req.file,
-          parseStatus: resumeParseStatus
-        });
-      }
-
-      const report = reportService.create({
-        id: reportId,
-        analysisMode,
-        jobTitle: req.body.jobTitle,
-        jobDescription: analysisMode === 'candidate' ? req.body.jobDescription : null,
-        competencies: analysisMode === 'recruiter' ? req.body.competencies : null,
-        fileName: req.body.fileName || '粘贴的面试记录',
-        resumeText: analysisMode === 'candidate' ? req.body.resumeText : null,
-        transcript: req.body.transcript,
-        result: resultText
-      }, req.user.id, attachment);
-
-      return res.json({ result: resultText, reportId: report.id });
-    } catch (persistError) {
-      if (attachment) {
+    const telemetry = createAnalysisTelemetry({
+      analysisMode,
+      provider: aiService.provider,
+      model: aiService.model,
+      inputChars: inputContent.length,
+    });
+    disconnectController = bindClientDisconnect(res);
+    const responsePayload = await executeAnalysis({
+      run: (signal) => aiService.runAnalysis({ systemPrompt, inputContent, signal }),
+      validate: validateAnalysisOutput,
+      persist: async (resultText) => {
+        const reportId = uuidv4();
+        let attachment = null;
         try {
-          await reportAttachmentService.deleteAttachmentFile(attachment.relativePath);
-        } catch (cleanupError) {
-          console.error('Attachment cleanup failed:', attachment.id, cleanupError?.code || cleanupError?.name || 'Error');
+          if (req.file) {
+            attachment = await reportAttachmentService.saveResumeFile({
+              userId: req.user.id,
+              reportId,
+              file: req.file,
+              parseStatus: resumeParseStatus
+            });
+          }
+
+          const report = reportService.create({
+            id: reportId,
+            analysisMode,
+            jobTitle: req.body.jobTitle,
+            jobDescription: analysisMode === 'candidate' ? req.body.jobDescription : null,
+            competencies: analysisMode === 'recruiter' ? req.body.competencies : null,
+            fileName: req.body.fileName || '粘贴的面试记录',
+            resumeText: analysisMode === 'candidate' ? req.body.resumeText : null,
+            transcript: req.body.transcript,
+            result: resultText
+          }, req.user.id, attachment);
+
+          return { result: resultText, reportId: report.id };
+        } catch (persistError) {
+          if (attachment) {
+            try {
+              await reportAttachmentService.deleteAttachmentFile(attachment.relativePath);
+            } catch (cleanupError) {
+              console.error('Attachment cleanup failed:', attachment.id, cleanupError?.code || cleanupError?.name || 'Error');
+            }
+          }
+          throw persistError;
         }
-      }
-      throw persistError;
-    }
+      },
+      signal: disconnectController.signal,
+      telemetry,
+      release: releaseAnalysis,
+    });
+
+    if (!res.destroyed && !res.writableEnded) return res.json(responsePayload);
+    return undefined;
   } catch (error) {
+    if (error?.code === 'AI_REQUEST_CANCELLED' || res.destroyed || res.writableEnded) {
+      return undefined;
+    }
     const status = error?.code === 'INVALID_ANALYSIS_OUTPUT'
       ? 502
-      : (isRequestValidationError(error) ? 400 : 500);
+      : (isRequestValidationError(error) ? 400 : (error?.status || 500));
     console.error('AI Analysis Error:', error?.name || 'Error');
-    res.status(status).json({ error: error.message || 'An error occurred during analysis.' });
+    return res.status(status).json({
+      error: error.message || 'An error occurred during analysis.',
+      ...(error?.code ? { code: error.code } : {}),
+    });
+  } finally {
+    disconnectController?.dispose();
   }
 });
 
