@@ -117,12 +117,28 @@ const initializePrompt = (database, table, content) => {
   }
 };
 
+const parseIssues = (value) => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item) => typeof item === 'string').slice(0, 6)
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const normalizeStoredRating = (value) => (
+  Number.isInteger(value) && value >= 1 && value <= 5 ? value : 0
+);
+
 const toFeedback = (row) => ({
   id: row.id,
   reportId: row.report_id,
-  rating: row.rating,
+  rating: normalizeStoredRating(row.rating),
   comments: row.comments,
-  specificIssues: row.specific_issues ? JSON.parse(row.specific_issues) : undefined,
+  specificIssues: parseIssues(row.specific_issues),
   jobTitle: row.job_title,
   competencies: row.competencies,
   fileName: row.file_name,

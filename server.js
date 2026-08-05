@@ -34,6 +34,7 @@ import {
   createConcurrencyGuard,
   createWindowGuard,
 } from './services/requestGuards.js';
+import { validateFeedback } from './services/feedbackValidation.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -454,21 +455,18 @@ app.get('/api/admin/reports', authenticate, requireAdmin, (req, res) => {
 
 // Feedback Endpoints (需要认证)
 app.post('/api/feedback', authenticate, limitFeedback, (req, res) => {
+  let feedback;
   try {
-    const { reportId, rating, comments, specificIssues } = req.body;
-    
-    if (!reportId || !rating) {
-      return res.status(400).json({ error: 'Missing required fields: reportId, rating' });
-    }
-    
-    const feedback = {
-      reportId,
-      rating,
-      comments,
-      specificIssues
-    };
-    
-    const report = reportService.getById(reportId, req.user.id, req.user.isAdmin);
+    feedback = validateFeedback(req.body);
+  } catch {
+    return res.status(400).json({
+      error: 'Invalid feedback',
+      code: 'INVALID_FEEDBACK',
+    });
+  }
+
+  try {
+    const report = reportService.getById(feedback.reportId, req.user.id, req.user.isAdmin);
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }

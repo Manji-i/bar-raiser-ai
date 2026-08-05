@@ -49,3 +49,30 @@ test('Candidate 结论契约兼容旧 Prompt 且只追加一次', () => {
   );
   assert.match(DEFAULT_CANDIDATE_PROMPT_CONTENT, new RegExp(CANDIDATE_CONCLUSION_CONTRACT_ID));
 });
+
+test('历史异常反馈读取时安全归一化且不改写数据库', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'evalbar-feedback-compat-'));
+  const database = new DatabaseSync(join(directory, 'app.db'));
+
+  try {
+    initializeSchema(database);
+    database.prepare(`
+      INSERT INTO feedback (id, report_id, rating, comments, specific_issues, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run('feedback-1', 'report-1', 999, '历史值', '"not-an-array"', '2026-08-05T00:00:00.000Z');
+    const service = createPromptService(database);
+
+    const [feedback] = service.getAllFeedback();
+    assert.equal(feedback.rating, 0);
+    assert.deepEqual(feedback.specificIssues, []);
+
+    const raw = database.prepare(
+      'SELECT rating, specific_issues FROM feedback WHERE id = ?',
+    ).get('feedback-1');
+    assert.equal(raw.rating, 999);
+    assert.equal(raw.specific_issues, '"not-an-array"');
+  } finally {
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

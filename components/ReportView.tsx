@@ -13,6 +13,10 @@ import {
   type CandidateReportData,
 } from '../services/reportDocumentModel';
 import { usePreparedReportPdf } from '../services/pdf/usePreparedReportPdf';
+import {
+  CANDIDATE_FEEDBACK_ISSUES,
+  RECRUITER_FEEDBACK_ISSUES,
+} from '../services/feedbackValidation';
 
 interface ReportViewProps {
   authMode: AnalysisMode;
@@ -466,8 +470,8 @@ const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnal
 
   const score = reportDocument.overallScore;
   const feedbackIssues = isCandidate
-    ? ['核心问题不准确', '证据引用不准确', '示范回答不实用', '行动建议不具体', '遗漏重要问题', '其他问题']
-    : ['评分标准不准确', 'STAR法则应用不当', '人岗匹配分析错误', '维度评估不全面', '风险提示不清晰', '其他问题'];
+    ? CANDIDATE_FEEDBACK_ISSUES
+    : RECRUITER_FEEDBACK_ISSUES;
 
   return (
     <div className="w-full pb-20">

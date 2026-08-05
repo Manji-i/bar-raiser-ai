@@ -310,7 +310,7 @@ const AdminView: React.FC = () => {
                           </div>
 
                           {/* 问题标签 */}
-                          {feedback.specificIssues && feedback.specificIssues.length > 0 && (
+                          {Array.isArray(feedback.specificIssues) && feedback.specificIssues.length > 0 && (
                             <div className="flex flex-wrap gap-2 mb-3">
                               {feedback.specificIssues.map((issue, idx) => (
                                 <span
