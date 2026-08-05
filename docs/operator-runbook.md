@@ -2,7 +2,7 @@
 
 ## 1. 生产事实
 
-- 线上地址：`http://14.103.45.4:3000/`
+- 线上地址：`https://evalbar.cn/`
 - 主机：`root@14.103.45.4`
 - 目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`
@@ -74,6 +74,8 @@ curl -sS -o /dev/null -w 'font_bold=%{http_code}\n' http://127.0.0.1:3000/fonts/
 ```
 
 预期：首页、PDF Worker 和两份字体均为 `200`，未认证报告接口为 `401`，HTML 指向本次构建的新 asset。
+
+服务器本机执行 `ss -ltnp | grep ':3000'` 时，Node 必须只监听 `127.0.0.1:3000`。外部检查 `evalbar.cn:3000` 和服务器 IP `:3000` 必须拒绝连接或超时；若返回应用页面，发布不能验收。
 
 ### 4.3 数据结构
 

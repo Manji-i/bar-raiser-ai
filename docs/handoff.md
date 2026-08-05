@@ -4,7 +4,7 @@
 
 截至 2026-08-03 本次文档同步前，GitHub `origin/main` 为提交 `6e81b57`（`docs: document PDF export server footprint`），生产服务器代码为 `d97c450`（`docs: record text PDF production deployment`）；两者都包含首个文字型 PDF 生产代码提交 `109cb7e`。`6e81b57` 只更新文档，未再次部署，不影响线上功能版本。本次 `neat-freak` 同步产生的提交先保留在本地，推送或部署后再更新远端检查点。服务器直连 GitHub 不稳定，代码发布继续使用 Bundle 路径。
 
-- 线上地址：`http://14.103.45.4:3000/`
+- 线上地址：`https://evalbar.cn/`；Node 的 `127.0.0.1:3000` 仅供本机 Nginx 反代。
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
 - 当前首页资源：`/assets/index-BYxbUDod.js`

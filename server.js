@@ -22,12 +22,14 @@ import {
   reportAttachmentService,
   validateResumeFile
 } from './services/reportAttachmentService.js';
+import { getListenHost } from './services/serverConfig.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = getListenHost();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -434,8 +436,8 @@ app.use((req, res) => {
 export { app };
 
 if (process.argv[1] === __filename) {
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Server is running on ${HOST}:${PORT}`);
     console.log(`AI Provider: ${AI_PROVIDER}`);
   });
 }

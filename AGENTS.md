@@ -66,7 +66,7 @@
 
 ## 部署注意
 
-- 线上站点：`http://14.103.45.4:3000/`。
+- 线上站点：`https://evalbar.cn/`；`3000` 端口仅供服务器本机 Nginx 反代，不是公网入口。
 - 线上服务当前由 `root@14.103.45.4` 的 PM2 管理，项目目录是 `/root/bar-raiser-ai-new/bar-raiser-ai`，进程名是 `bar-raiser-ai`。
 - `dist/` 是构建产物，线上是否最新不能只看源码，要对比线上 HTML 引用的 asset hash。
 - 生产服务器只有 1.9 GB 内存且没有 swap，禁止在该主机执行 `npm run build`；必须在本地或 CI 完成测试与构建，校验后上传 `dist/` 并原子替换。

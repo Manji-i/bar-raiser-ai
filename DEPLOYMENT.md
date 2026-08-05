@@ -2,7 +2,7 @@
 
 ## 线上现状
 
-- 线上地址：`http://14.103.45.4:3000/`
+- 线上地址：`https://evalbar.cn/`
 - 服务器：`root@14.103.45.4`
 - 项目目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - 进程管理：PM2，进程名 `bar-raiser-ai`
@@ -132,7 +132,7 @@ pm2 save
 pm2 status bar-raiser-ai
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/
 curl -sS -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:3000/api/reports?analysisMode=candidate'
-curl -sS -L http://14.103.45.4:3000/ | grep -o '/assets/index-[A-Za-z0-9_-]*\.js'
+curl -sS -L https://evalbar.cn/ | grep -o '/assets/index-[A-Za-z0-9_-]*\.js'
 pdf_worker_path="$(find dist/assets -maxdepth 1 -name 'reportPdf.worker-*.js' -print -quit | sed 's#^dist##')"
 curl -sS -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:3000$pdf_worker_path"
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Regular-v1.otf
@@ -140,6 +140,8 @@ curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC
 ```
 
 预期首页、PDF Worker 和字体为 `200`，未认证报告接口为 `401`，PM2 为 `online`。同时记录服务器 `HEAD` 与 HTML 中的主 asset hash。数据库结构检查和更完整的冒烟步骤见 `docs/operator-runbook.md`。
+
+Node 默认只监听 `127.0.0.1:3000`。发布时还必须确认云安全组和主机防火墙没有向公网开放 `3000/tcp`；从外网访问 `evalbar.cn:3000` 和服务器 IP `:3000` 应拒绝连接或超时。
 
 ## Docker 部署
 

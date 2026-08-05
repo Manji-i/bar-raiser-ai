@@ -36,6 +36,7 @@ RUN mkdir -p data && chown -R appuser:appgroup /app/data
 USER appuser
 
 # Expose the port
+ENV HOST=0.0.0.0
 EXPOSE 3000
 
 # Start the application
