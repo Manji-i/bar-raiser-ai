@@ -67,6 +67,48 @@ test('DeepSeek 缺少 API Key 时启动失败关闭', () => {
   );
 });
 
+test('豆包使用流式响应并拼接正文，避免等待完整报告才收到响应头', async () => {
+  let requestBody;
+  let requestOptions;
+
+  class FakeOpenAI {
+    constructor() {
+      this.chat = {
+        completions: {
+          create: async (body, options) => {
+            requestBody = body;
+            requestOptions = options;
+            return (async function* chunks() {
+              yield { choices: [{ delta: { reasoning_content: '内部思考' } }] };
+              yield { choices: [{ delta: { content: '## 分析' } }] };
+              yield { choices: [{ delta: { content: '报告\n正文' } }] };
+            })();
+          },
+        },
+      };
+    }
+  }
+
+  const service = createAiService({
+    env: {
+      AI_PROVIDER: 'doubao',
+      DOUBAO_API_KEY: 'test-key',
+    },
+    OpenAIClass: FakeOpenAI,
+  });
+  const controller = new AbortController();
+
+  const result = await service.runAnalysis({
+    systemPrompt: 'system',
+    inputContent: 'input',
+    signal: controller.signal,
+  });
+
+  assert.equal(requestBody.stream, true);
+  assert.equal(requestOptions.signal, controller.signal);
+  assert.equal(result, '## 分析报告\n正文');
+});
+
 test('AI 上游错误映射为稳定且不泄漏原文的错误码', () => {
   const cases = [
     [{ name: 'APIConnectionTimeoutError', message: 'secret timeout detail' }, 'AI_UPSTREAM_TIMEOUT', 504],
@@ -91,4 +133,21 @@ test('主动取消与上游超时使用不同错误语义', () => {
 
   assert.equal(cancelled.code, 'AI_REQUEST_CANCELLED');
   assert.equal(cancelled.status, 499);
+});
+
+test('300 秒响应头超时和上游 504 统一识别为模型超时', () => {
+  const headersTimeout = normalizeAiError({
+    name: 'APIConnectionError',
+    cause: {
+      cause: {
+        code: 'UND_ERR_HEADERS_TIMEOUT',
+      },
+    },
+  });
+  const gatewayTimeout = normalizeAiError({ status: 504 });
+
+  assert.equal(headersTimeout.code, 'AI_UPSTREAM_TIMEOUT');
+  assert.equal(headersTimeout.status, 504);
+  assert.equal(gatewayTimeout.code, 'AI_UPSTREAM_TIMEOUT');
+  assert.equal(gatewayTimeout.status, 504);
 });

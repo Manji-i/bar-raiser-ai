@@ -13,6 +13,15 @@ export class AiServiceError extends Error {
   }
 }
 
+const findCauseCode = (error) => {
+  let current = error;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    if (typeof current.code === 'string') return current.code;
+    current = current.cause;
+  }
+  return null;
+};
+
 export const normalizeAiError = (error, { signal } = {}) => {
   if (error instanceof AiServiceError) return error;
   if (signal?.aborted || error?.name === 'AbortError' || error?.name === 'APIUserAbortError') {
@@ -22,7 +31,14 @@ export const normalizeAiError = (error, { signal } = {}) => {
       cause: error,
     });
   }
-  if (error?.name === 'APIConnectionTimeoutError' || error?.code === 'ETIMEDOUT') {
+  const causeCode = findCauseCode(error);
+  if (
+    error?.name === 'APIConnectionTimeoutError'
+    || error?.status === 504
+    || causeCode === 'ETIMEDOUT'
+    || causeCode === 'UND_ERR_HEADERS_TIMEOUT'
+    || causeCode === 'UND_ERR_BODY_TIMEOUT'
+  ) {
     return new AiServiceError('AI provider timed out', {
       code: 'AI_UPSTREAM_TIMEOUT',
       status: 504,
@@ -122,15 +138,23 @@ export const createAiService = ({
       provider,
       model,
       async runAnalysis({ systemPrompt, inputContent, signal }) {
-        const completion = await runSafely(() => client.chat.completions.create({
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: inputContent },
-          ],
-          model,
-          temperature: 0.4,
-        }, { signal }), signal);
-        return completion.choices[0]?.message?.content;
+        return runSafely(async () => {
+          const stream = await client.chat.completions.create({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: inputContent },
+            ],
+            model,
+            temperature: 0.4,
+            stream: true,
+          }, { signal });
+          let content = '';
+          for await (const chunk of stream) {
+            const delta = chunk.choices[0]?.delta?.content;
+            if (typeof delta === 'string') content += delta;
+          }
+          return content;
+        }, signal);
       },
     };
   }
