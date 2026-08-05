@@ -14,6 +14,7 @@ const createPdfClientHarness = () => {
   let onerror: ((event: ErrorEvent) => void) | null = null;
   let postCount = 0;
   let terminateCount = 0;
+  const timeoutDelays: number[] = [];
   const downloads: string[] = [];
   const revokedUrls: string[] = [];
   const worker: PdfWorkerPort = {
@@ -29,7 +30,10 @@ const createPdfClientHarness = () => {
     createObjectURL: () => 'blob:test',
     revokeObjectURL: (url) => revokedUrls.push(url),
     triggerDownload: (_url, fileName) => downloads.push(fileName),
-    setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs ?? 15_000),
+    setTimeout: (callback, delayMs) => {
+      timeoutDelays.push(delayMs ?? 15_000);
+      return globalThis.setTimeout(callback, delayMs ?? 15_000);
+    },
     clearTimeout: (id) => globalThis.clearTimeout(id),
     randomUUID: () => 'request-1',
   };
@@ -38,12 +42,26 @@ const createPdfClientHarness = () => {
     model: buildReportDocumentModel(recruiterFixture),
     downloads,
     revokedUrls,
+    timeoutDelays,
     get postCount() { return postCount; },
     get terminateCount() { return terminateCount; },
     succeed: (blob: Blob) => onmessage?.({ data: { type: 'success', requestId: 'request-1', blob } } as MessageEvent),
     fail: (code: string) => onmessage?.({ data: { type: 'error', requestId: 'request-1', code, message: '生成失败' } } as MessageEvent),
   };
 };
+
+test('冷字体下载允许 60 秒完成 PDF 准备', async () => {
+  const harness = createPdfClientHarness();
+  const client = new ReportPdfClient(harness.runtime);
+  const preparing = client.prepare(harness.model);
+
+  try {
+    assert.equal(harness.timeoutDelays[0], 60_000);
+  } finally {
+    client.dispose();
+    await assert.rejects(preparing, /PDF_CLIENT_DISPOSED/);
+  }
+});
 
 test('prepare 复用任务，download 复用 Blob，dispose 释放 URL', async () => {
   const harness = createPdfClientHarness();

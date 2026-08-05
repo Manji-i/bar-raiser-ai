@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import {
+import * as httpSecurity from '../services/httpSecurity.js';
+
+const {
   applySecurityHeaders,
   isAllowedOrigin,
-} from '../services/httpSecurity.js';
+} = httpSecurity;
 
 const serverSource = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -31,6 +33,23 @@ test('只允许规范生产域名和本地开发 Origin', () => {
   assert.equal(isAllowedOrigin('https://evalbar.cn.evil.example'), false);
 });
 
+test('版本化构建资源和字体使用一年不可变缓存', () => {
+  assert.equal(typeof httpSecurity.applyStaticAssetCacheHeaders, 'function');
+  const headers = new Map();
+  const res = { setHeader: (key, value) => headers.set(key, value) };
+
+  httpSecurity.applyStaticAssetCacheHeaders(res, '/srv/dist/assets/index-AbC123.js');
+  assert.equal(headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+
+  headers.clear();
+  httpSecurity.applyStaticAssetCacheHeaders(res, '/srv/dist/fonts/NotoSansSC-Regular-v1.otf');
+  assert.equal(headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+
+  headers.clear();
+  httpSecurity.applyStaticAssetCacheHeaders(res, '/srv/dist/index.html');
+  assert.equal(headers.has('Cache-Control'), false);
+});
+
 test('Express 关闭宽松 CORS、技术指纹和 API HTML 回退', () => {
   assert.equal(packageJson.dependencies.cors, undefined);
   assert.doesNotMatch(serverSource, /app\.use\(cors\(\)\)/);
@@ -38,4 +57,5 @@ test('Express 关闭宽松 CORS、技术指纹和 API HTML 回退', () => {
   assert.match(serverSource, /ORIGIN_NOT_ALLOWED/);
   assert.match(serverSource, /API_NOT_FOUND/);
   assert.match(serverSource, /Registration failed/);
+  assert.match(serverSource, /setHeaders:\s*applyStaticAssetCacheHeaders/);
 });

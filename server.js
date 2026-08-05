@@ -40,6 +40,7 @@ import {
 } from './services/promptSecurity.js';
 import {
   applySecurityHeaders,
+  applyStaticAssetCacheHeaders,
   isAllowedOrigin,
 } from './services/httpSecurity.js';
 
@@ -571,7 +572,9 @@ app.use('/api', (req, res) => {
 });
 
 // Serve static files from the React app
-app.use(express.static(path.join(__dirname, 'dist')));
+app.use(express.static(path.join(__dirname, 'dist'), {
+  setHeaders: applyStaticAssetCacheHeaders,
+}));
 
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.

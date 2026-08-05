@@ -3,6 +3,8 @@ import { isPdfWorkerResponse } from './reportPdfProtocol.ts';
 
 export type PdfClientStatus = 'idle' | 'preparing' | 'ready' | 'error';
 
+export const REPORT_PDF_PREPARE_TIMEOUT_MS = 60_000;
+
 export interface PdfWorkerPort {
   postMessage(message: unknown): void;
   terminate(): void;
@@ -38,7 +40,7 @@ const browserPdfRuntime: PdfClientRuntime = {
     anchor.click();
     anchor.remove();
   },
-  setTimeout: (callback, delayMs = 15_000) => window.setTimeout(callback, delayMs),
+  setTimeout: (callback, delayMs = REPORT_PDF_PREPARE_TIMEOUT_MS) => window.setTimeout(callback, delayMs),
   clearTimeout: (id) => window.clearTimeout(id),
   randomUUID: () => crypto.randomUUID(),
 };
@@ -90,7 +92,10 @@ export class ReportPdfClient {
         reject(new Error(code));
       };
 
-      this.timeout = this.runtime.setTimeout(() => fail('WORKER_TIMEOUT'), 15_000);
+      this.timeout = this.runtime.setTimeout(
+        () => fail('WORKER_TIMEOUT'),
+        REPORT_PDF_PREPARE_TIMEOUT_MS,
+      );
       worker.onerror = () => fail('PDF_BUILD_FAILED');
       worker.onmessage = ({ data }) => {
         if (!isPdfWorkerResponse(data) || data.requestId !== requestId) return;
@@ -166,7 +171,7 @@ export const probeReportPdfWorker = (): Promise<Blob> => new Promise((resolve, r
   const timeout = window.setTimeout(() => {
     worker.terminate();
     reject(new Error('WORKER_TIMEOUT'));
-  }, 15_000);
+  }, REPORT_PDF_PREPARE_TIMEOUT_MS);
 
   const finish = () => {
     window.clearTimeout(timeout);
