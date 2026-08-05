@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const indexTsx = readFileSync(new URL('../index.tsx', import.meta.url), 'utf8');
 const recruiterUpload = readFileSync(
   new URL('../components/FileUpload.tsx', import.meta.url),
   'utf8',
@@ -43,6 +44,12 @@ const geminiService = readFileSync(
 
 test('页面入口不引用不存在的 index.css', () => {
   assert.doesNotMatch(indexHtml, /href=["']\/index\.css["']/);
+});
+
+test('前端样式和字体由本地构建提供', () => {
+  assert.doesNotMatch(indexHtml, /cdn\.tailwindcss\.com|fonts\.googleapis\.com|esm\.sh/);
+  assert.doesNotMatch(indexHtml, /type=["']importmap["']/);
+  assert.match(indexTsx, /import ['"]\.\/src\/index\.css['"]/);
 });
 
 test('招聘方上传页不使用未安装的 Tailwind 动画或未定义工具类', () => {

@@ -15,7 +15,6 @@
   "dependencies": {
     "@google/genai": "^1.52.0",
     "cookie-parser": "^1.4.7",
-    "cors": "^2.8.6",
     "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -33,10 +32,14 @@
     "uuid": "^13.0.2"
   },
   "devDependencies": {
+    "@fontsource/inter": "^5.3.0",
     "@types/node": "^22.14.0",
     "@types/pdfmake": "0.3.3",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.5.4",
     "concurrently": "^9.2.4",
+    "postcss": "^8.5.25",
+    "tailwindcss": "^3.4.19",
     "typescript": "~5.8.2",
     "vite": "^6.4.3"
   }

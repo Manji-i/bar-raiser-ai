@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
@@ -39,6 +38,10 @@ import {
   applyPromptSecurityContract,
   validateAnalysisOutput,
 } from './services/promptSecurity.js';
+import {
+  applySecurityHeaders,
+  isAllowedOrigin,
+} from './services/httpSecurity.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -51,7 +54,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.set('trust proxy', 'loopback');
-app.use(cors());
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  applySecurityHeaders(res);
+  next();
+});
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if (origin && isWrite && !isAllowedOrigin(origin)) {
+    return res.status(403).json({
+      error: 'Origin not allowed',
+      code: 'ORIGIN_NOT_ALLOWED',
+    });
+  }
+  return next();
+});
 app.use(express.json({ limit: '512kb' }));
 app.use((error, req, res, next) => {
   if (error?.type === 'entity.too.large') {
@@ -249,7 +267,7 @@ app.post('/api/auth/register', limitRegistration, async (req, res) => {
     setSessionCookie(req, res, result.token);
     res.json({ user: result.user });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ error: 'Registration failed' });
   }
 });
 
@@ -265,7 +283,7 @@ app.post('/api/auth/login', limitLogin, async (req, res) => {
     setSessionCookie(req, res, result.token);
     res.json({ user: result.user });
   } catch (error) {
-    res.status(401).json({ error: error.message });
+    res.status(401).json({ error: 'Invalid credentials' });
   }
 });
 
@@ -546,6 +564,10 @@ app.put('/api/prompt/current', authenticate, requireAdmin, (req, res) => {
     const status = isRequestValidationError(error) ? 400 : 500;
     res.status(status).json({ error: error.message || "An error occurred while updating prompt." });
   }
+});
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'API endpoint not found', code: 'API_NOT_FOUND' });
 });
 
 // Serve static files from the React app

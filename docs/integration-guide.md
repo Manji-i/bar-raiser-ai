@@ -218,7 +218,7 @@ GET /api/admin/reports?analysisMode=recruiter
 |---|---|
 | `200` | 请求成功 |
 | `400` | 模式非法、必填字段缺失、文件类型/签名/大小不合法 |
-| `401` | 缺少或无效 Bearer token |
+| `401` | 缺少或无效的浏览器会话 Cookie / Bearer Token |
 | `403` | 非管理员调用管理接口 |
 | `404` | 报告或简历不存在，或用户无权访问该报告 |
 | `413` | JSON、multipart 字段/分段或简历文件超过资源上限；按响应 `code` 区分 |
@@ -226,6 +226,8 @@ GET /api/admin/reports?analysisMode=recruiter
 | `500` | AI、持久化或内部服务失败 |
 
 错误响应使用 `{ "error": "..." }`。客户端不应依赖完整英文错误文案做业务分支，应优先根据状态码处理。
+
+浏览器 API 必须保持同源；生产允许 `https://evalbar.cn` 和 `https://www.evalbar.cn`，本地开发允许 Vite 的 `localhost:5173` 与 `127.0.0.1:5173`。服务端不返回跨域通配符，带恶意 `Origin` 的写请求返回 `403 ORIGIN_NOT_ALLOWED`。无浏览器 Origin 的受控集成仍可使用 Bearer Token。
 
 ## 9. 隐私与数据责任
 
