@@ -32,6 +32,20 @@ test('招聘官模式保持能力维度必填', () => {
   assert.throws(() => validateAnalysisRequest({ jobTitle: '产品经理', transcript: '面试记录' }), /competencies/);
 });
 
+test('拒绝超过字段预算的分析文本', () => {
+  assert.throws(() => validateAnalysisRequest({
+    analysisMode: 'recruiter',
+    jobTitle: '产品经理',
+    competencies: '能力',
+    transcript: 'x'.repeat(100001),
+  }), /Transcript exceeds 100000 characters/);
+  assert.throws(() => validateAnalysisRequest({
+    analysisMode: 'candidate',
+    jobTitle: 'x'.repeat(201),
+    transcript: '面试记录',
+  }), /Job title exceeds 200 characters/);
+});
+
 test('候选人材料按 JSON 数据边界传入且不会执行其中的伪指令', () => {
   const candidateInput = buildCandidateInput({
     jobTitle: '产品经理',

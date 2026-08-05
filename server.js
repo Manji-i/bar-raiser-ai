@@ -47,7 +47,16 @@ const __dirname = path.dirname(__filename);
 
 app.set('trust proxy', 'loopback');
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '512kb' }));
+app.use((error, req, res, next) => {
+  if (error?.type === 'entity.too.large') {
+    return res.status(413).json({
+      error: 'Request body exceeds 512 KB',
+      code: 'REQUEST_TOO_LARGE',
+    });
+  }
+  return next(error);
+});
 app.use(cookieParser());
 
 const requestLimits = {
@@ -147,17 +156,40 @@ if (AI_PROVIDER === 'gemini') {
 
 const resumeUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { files: 1, fileSize: 10 * 1024 * 1024 }
+  limits: {
+    files: 1,
+    fields: 7,
+    parts: 8,
+    fieldSize: 200 * 1024,
+    fileSize: 10 * 1024 * 1024,
+  },
 });
 
 const uploadResume = (req, res, next) => {
   if (!req.is('multipart/form-data')) return next();
   return resumeUpload.single('resumeFile')(req, res, (error) => {
     if (!error) return next();
-    const message = error.code === 'LIMIT_FILE_SIZE'
-      ? 'Resume file exceeds 10 MB'
-      : 'Invalid resume upload';
-    return res.status(400).json({ error: message });
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: 'Resume file exceeds 10 MB',
+        code: 'RESUME_TOO_LARGE',
+      });
+    }
+    if (new Set([
+      'LIMIT_FIELD_VALUE',
+      'LIMIT_FIELD_COUNT',
+      'LIMIT_PART_COUNT',
+      'LIMIT_FILE_COUNT',
+    ]).has(error.code)) {
+      return res.status(413).json({
+        error: 'Multipart request exceeds resource limits',
+        code: 'MULTIPART_LIMIT_EXCEEDED',
+      });
+    }
+    return res.status(400).json({
+      error: 'Invalid resume upload',
+      code: 'INVALID_RESUME_UPLOAD',
+    });
   });
 };
 
@@ -188,7 +220,10 @@ const runAiAnalysis = async (systemPrompt, inputContent) => {
   throw new Error(`Unsupported AI Provider: ${AI_PROVIDER}`);
 };
 
-const isRequestValidationError = (error) => /^(Invalid|Missing|Resume|Unsupported)/.test(error?.message ?? '');
+const isRequestValidationError = (error) => (
+  /^(Invalid|Missing|Resume|Unsupported)/.test(error?.message ?? '')
+  || / exceeds \d+ characters$/.test(error?.message ?? '')
+);
 
 // API Routes
 

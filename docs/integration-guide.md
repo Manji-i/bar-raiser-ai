@@ -127,6 +127,8 @@ curl -X POST "$BASE_URL/api/analyze" \
 
 上传合法源文件但浏览器解析失败时，可以保留文件并以 `empty` 提交；用户补充文本后改为 `manual`。
 
+分析请求的 JSON 请求体上限为 512 KB。字段上限为：`jobTitle` 200、`jobDescription` 50000、`competencies` 5000、`transcript` 100000、`resumeText` 100000、`fileName` 255 个字符。multipart 只接受 1 个文件、7 个文本字段和 8 个分段，单个文本字段最大 200 KB。
+
 ### 3.3 Recruiter
 
 职位名称、胜任力要求和面试记录必填。旧客户端可以不传 `analysisMode`，但新接入应显式发送 `recruiter`。
@@ -219,6 +221,8 @@ GET /api/admin/reports?analysisMode=recruiter
 | `401` | 缺少或无效 Bearer token |
 | `403` | 非管理员调用管理接口 |
 | `404` | 报告或简历不存在，或用户无权访问该报告 |
+| `413` | JSON、multipart 字段/分段或简历文件超过资源上限；按响应 `code` 区分 |
+| `429` | 请求窗口额度耗尽或同一用户已有分析在途；按 `Retry-After` 和响应 `code` 处理 |
 | `500` | AI、持久化或内部服务失败 |
 
 错误响应使用 `{ "error": "..." }`。客户端不应依赖完整英文错误文案做业务分支，应优先根据状态码处理。

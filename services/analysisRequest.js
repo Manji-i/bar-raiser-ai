@@ -6,6 +6,24 @@ export const normalizeAnalysisMode = (value) => {
   return mode;
 };
 
+export const ANALYSIS_LIMITS = Object.freeze({
+  jobTitle: 200,
+  jobDescription: 50000,
+  competencies: 5000,
+  transcript: 100000,
+  resumeText: 100000,
+  fileName: 255,
+});
+
+const ANALYSIS_FIELD_LABELS = Object.freeze({
+  jobTitle: 'Job title',
+  jobDescription: 'Job description',
+  competencies: 'Competencies',
+  transcript: 'Transcript',
+  resumeText: 'Resume text',
+  fileName: 'File name',
+});
+
 const requireText = (data, fields) => {
   const missing = fields.filter((field) => typeof data[field] !== 'string' || !data[field].trim());
   if (missing.length > 0) {
@@ -18,6 +36,16 @@ export const validateAnalysisRequest = (data) => {
   requireText(data, analysisMode === 'candidate'
     ? ['transcript', 'jobTitle']
     : ['transcript', 'jobTitle', 'competencies']);
+
+  for (const [field, maxLength] of Object.entries(ANALYSIS_LIMITS)) {
+    const value = data[field];
+    if (value === undefined || value === null) continue;
+    const label = ANALYSIS_FIELD_LABELS[field];
+    if (typeof value !== 'string') throw new Error(`Invalid ${label.toLowerCase()}`);
+    if (value.length > maxLength) {
+      throw new Error(`${label} exceeds ${maxLength} characters`);
+    }
+  }
   return analysisMode;
 };
 
