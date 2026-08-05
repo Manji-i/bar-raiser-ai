@@ -67,6 +67,132 @@ test('DeepSeek 缺少 API Key 时启动失败关闭', () => {
   );
 });
 
+test('GLM 5.2 使用最高思考强度、流式正文、显式超时和零重试', async () => {
+  let clientOptions;
+  let requestBody;
+  let requestOptions;
+
+  class FakeOpenAI {
+    constructor(options) {
+      clientOptions = options;
+      this.chat = {
+        completions: {
+          create: async (body, options) => {
+            requestBody = body;
+            requestOptions = options;
+            return (async function* chunks() {
+              yield { choices: [{ delta: { reasoning_content: '内部思考' } }] };
+              yield { choices: [{ delta: { content: '## 分析' } }] };
+              yield { choices: [{ delta: { content: '报告\n正文' } }] };
+            })();
+          },
+        },
+      };
+    }
+  }
+
+  const service = createAiService({
+    env: {
+      AI_PROVIDER: 'glm',
+      GLM_API_KEY: 'test-key',
+    },
+    OpenAIClass: FakeOpenAI,
+  });
+  const controller = new AbortController();
+
+  const result = await service.runAnalysis({
+    systemPrompt: 'system',
+    inputContent: 'input',
+    signal: controller.signal,
+  });
+
+  assert.equal(service.provider, 'glm');
+  assert.equal(service.model, 'glm-5.2');
+  assert.deepEqual(clientOptions, {
+    apiKey: 'test-key',
+    baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+    timeout: 600000,
+    maxRetries: 0,
+  });
+  assert.equal(requestBody.model, 'glm-5.2');
+  assert.deepEqual(requestBody.thinking, { type: 'enabled' });
+  assert.equal(requestBody.reasoning_effort, 'max');
+  assert.equal(requestBody.stream, true);
+  assert.equal(requestOptions.signal, controller.signal);
+  assert.equal(result, '## 分析报告\n正文');
+});
+
+test('Kimi K3 固定思考模式只配置最高推理强度并流式聚合正文', async () => {
+  let clientOptions;
+  let requestBody;
+  let requestOptions;
+
+  class FakeOpenAI {
+    constructor(options) {
+      clientOptions = options;
+      this.chat = {
+        completions: {
+          create: async (body, options) => {
+            requestBody = body;
+            requestOptions = options;
+            return (async function* chunks() {
+              yield { choices: [{ delta: { reasoning_content: '内部思考' } }] };
+              yield { choices: [{ delta: { content: '## 分析' } }] };
+              yield { choices: [{ delta: { content: '报告\n正文' } }] };
+            })();
+          },
+        },
+      };
+    }
+  }
+
+  const service = createAiService({
+    env: {
+      AI_PROVIDER: 'kimi',
+      KIMI_API_KEY: 'test-key',
+    },
+    OpenAIClass: FakeOpenAI,
+  });
+  const controller = new AbortController();
+
+  const result = await service.runAnalysis({
+    systemPrompt: 'system',
+    inputContent: 'input',
+    signal: controller.signal,
+  });
+
+  assert.equal(service.provider, 'kimi');
+  assert.equal(service.model, 'kimi-k3');
+  assert.deepEqual(clientOptions, {
+    apiKey: 'test-key',
+    baseURL: 'https://api.moonshot.cn/v1',
+    timeout: 600000,
+    maxRetries: 0,
+  });
+  assert.equal(requestBody.model, 'kimi-k3');
+  assert.equal(requestBody.reasoning_effort, 'max');
+  assert.equal(requestBody.stream, true);
+  assert.equal('thinking' in requestBody, false);
+  assert.equal('temperature' in requestBody, false);
+  assert.equal(requestOptions.signal, controller.signal);
+  assert.equal(result, '## 分析报告\n正文');
+});
+
+test('GLM 和 Kimi 缺少各自 API Key 时按 Provider 失败关闭', () => {
+  for (const [provider, expectedMessage] of [
+    ['glm', 'GLM is not configured'],
+    ['kimi', 'Kimi is not configured'],
+  ]) {
+    assert.throws(
+      () => createAiService({ env: { AI_PROVIDER: provider }, OpenAIClass: class {} }),
+      (error) => error instanceof AiServiceError
+        && error.code === 'AI_PROVIDER_NOT_CONFIGURED'
+        && error.status === 500
+        && error.message === expectedMessage,
+    );
+  }
+});
+
 test('豆包使用流式响应并拼接正文，避免等待完整报告才收到响应头', async () => {
   let requestBody;
   let requestOptions;

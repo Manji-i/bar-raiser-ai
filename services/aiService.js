@@ -88,6 +88,15 @@ const integerSetting = (value, fallback) => {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
+const collectStreamingContent = async (stream) => {
+  let content = '';
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta?.content;
+    if (typeof delta === 'string') content += delta;
+  }
+  return content;
+};
+
 export const createAiService = ({
   env = process.env,
   OpenAIClass = OpenAI,
@@ -126,6 +135,67 @@ export const createAiService = ({
     };
   }
 
+  if (provider === 'glm') {
+    const model = env.GLM_MODEL || 'glm-5.2';
+    const client = new OpenAIClass({
+      apiKey: requireApiKey(env.GLM_API_KEY, 'GLM'),
+      baseURL: env.GLM_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4',
+      timeout,
+      maxRetries,
+    });
+    const reasoningEffort = env.GLM_REASONING_EFFORT || 'max';
+
+    return {
+      provider,
+      model,
+      async runAnalysis({ systemPrompt, inputContent, signal }) {
+        return runSafely(async () => {
+          const stream = await client.chat.completions.create({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: inputContent },
+            ],
+            model,
+            thinking: { type: 'enabled' },
+            reasoning_effort: reasoningEffort,
+            stream: true,
+          }, { signal });
+          return collectStreamingContent(stream);
+        }, signal);
+      },
+    };
+  }
+
+  if (provider === 'kimi') {
+    const model = env.KIMI_MODEL || 'kimi-k3';
+    const client = new OpenAIClass({
+      apiKey: requireApiKey(env.KIMI_API_KEY, 'Kimi'),
+      baseURL: env.KIMI_BASE_URL || 'https://api.moonshot.cn/v1',
+      timeout,
+      maxRetries,
+    });
+    const reasoningEffort = env.KIMI_REASONING_EFFORT || 'max';
+
+    return {
+      provider,
+      model,
+      async runAnalysis({ systemPrompt, inputContent, signal }) {
+        return runSafely(async () => {
+          const stream = await client.chat.completions.create({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: inputContent },
+            ],
+            model,
+            reasoning_effort: reasoningEffort,
+            stream: true,
+          }, { signal });
+          return collectStreamingContent(stream);
+        }, signal);
+      },
+    };
+  }
+
   if (provider === 'doubao') {
     const model = env.DOUBAO_MODEL || env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2-1-pro-260628';
     const client = new OpenAIClass({
@@ -148,12 +218,7 @@ export const createAiService = ({
             temperature: 0.4,
             stream: true,
           }, { signal });
-          let content = '';
-          for await (const chunk of stream) {
-            const delta = chunk.choices[0]?.delta?.content;
-            if (typeof delta === 'string') content += delta;
-          }
-          return content;
+          return collectStreamingContent(stream);
         }, signal);
       },
     };
