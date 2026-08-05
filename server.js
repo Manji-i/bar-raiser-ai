@@ -35,6 +35,10 @@ import {
   createWindowGuard,
 } from './services/requestGuards.js';
 import { validateFeedback } from './services/feedbackValidation.js';
+import {
+  applyPromptSecurityContract,
+  validateAnalysisOutput,
+} from './services/promptSecurity.js';
 
 dotenv.config({ path: '.env', quiet: true });
 dotenv.config({ path: '.env.local', override: true, quiet: true });
@@ -322,9 +326,10 @@ app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, 
       ? buildCandidateInput(inputData)
       : buildRecruiterInput(inputData);
     const storedPrompt = promptService.getCurrentPrompt(analysisMode).content;
-    const systemPrompt = analysisMode === 'candidate'
+    const productPrompt = analysisMode === 'candidate'
       ? applyCandidateConclusionContract(storedPrompt)
       : storedPrompt;
+    const systemPrompt = applyPromptSecurityContract(productPrompt);
     const releaseAnalysis = analysisConcurrency.acquire(req.user.id);
     if (!releaseAnalysis) {
       return res.status(429).json({
@@ -334,11 +339,9 @@ app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, 
     }
     res.once('finish', releaseAnalysis);
     res.once('close', releaseAnalysis);
-    const resultText = await runAiAnalysis(systemPrompt, inputContent);
-
-    if (!resultText) {
-      throw new Error('No text response received from AI service.');
-    }
+    const resultText = validateAnalysisOutput(
+      await runAiAnalysis(systemPrompt, inputContent),
+    );
 
     const reportId = uuidv4();
     let attachment = null;
@@ -376,7 +379,9 @@ app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, 
       throw persistError;
     }
   } catch (error) {
-    const status = isRequestValidationError(error) ? 400 : 500;
+    const status = error?.code === 'INVALID_ANALYSIS_OUTPUT'
+      ? 502
+      : (isRequestValidationError(error) ? 400 : 500);
     console.error('AI Analysis Error:', error?.name || 'Error');
     res.status(status).json({ error: error.message || 'An error occurred during analysis.' });
   }

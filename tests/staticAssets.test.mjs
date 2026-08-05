@@ -113,3 +113,9 @@ test('PDF 引擎只通过 Worker 懒加载', () => {
   assert.match(reportView, /usePreparedReportPdf/);
   assert.doesNotMatch(reportView, /from ['"]pdfmake/);
 });
+
+test('报告 Markdown 不加载图片或原始 HTML，并过滤链接协议', () => {
+  assert.match(reportView, /img:\s*\(\)\s*=>\s*null/);
+  assert.match(reportView, /safeMarkdownUrl\(href\)/);
+  assert.doesNotMatch(reportView, /rehype-raw/);
+});

@@ -17,6 +17,7 @@ import {
   CANDIDATE_FEEDBACK_ISSUES,
   RECRUITER_FEEDBACK_ISSUES,
 } from '../services/feedbackValidation';
+import { safeMarkdownUrl } from '../services/markdownSecurity';
 
 interface ReportViewProps {
   authMode: AnalysisMode;
@@ -190,6 +191,21 @@ const markdownComponents = {
   blockquote: ({ node, ...props }: any) => (
     <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-500 my-4" {...props} />
   ),
+  img: () => null,
+  a: ({ node, href, children, ...props }: any) => {
+    const safe = safeMarkdownUrl(href);
+    return safe ? (
+      <a
+        {...props}
+        href={safe}
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        className="text-brand-600 underline hover:text-brand-700"
+      >
+        {children}
+      </a>
+    ) : <span>{children}</span>;
+  },
 };
 
 const ReportView: React.FC<ReportViewProps> = ({ authMode, analysis: initialAnalysis, onReset }) => {
