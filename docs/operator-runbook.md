@@ -28,7 +28,7 @@ npm run build
 
 - 部署来源是明确的本地 `main` 提交。
 - 没有把 `.env*`、`data/`、候选人材料或原型文件纳入提交。
-- 当前 55 个自动化测试全部通过；新增测试后以实际总数为准。
+- 全量自动化测试全部通过，以本次 `npm test` 的实际总数为准。
 - 生产构建成功。Tailwind 和 Inter 已进入本地构建；大 chunk 和 Vite 对 `.env` 中 `NODE_ENV=production` 的提示是当前已知警告，不等于构建失败；不要在 `.env` 中设置该值。
 - 构建在本地或 CI 完成并生成待发布的 `dist/`；1.9 GB、无 swap 的生产主机不得执行 `npm run build`。
 
@@ -122,6 +122,14 @@ pm2 logs bar-raiser-ai --lines 1000 --nostream \
 
 历史报告没有生成开始时间，不能从 `reports.created_at` 反推真实耗时。上线该日志后，平均耗时使用成功记录的 `durationMs` 计算，并同时观察 P50、P90、最大值和失败率，避免平均数掩盖长尾。
 
+经明确授权执行 Provider 对比时，`scripts/generate-provider-comparison.mjs` 会记录 `event=provider_comparison_completed`，字段仅包含源报告 ID、Provider、模型、新报告 ID、状态、`durationMs`、输入/输出字符数和错误码。脚本不会记录职位、能力要求、逐字稿、Prompt、报告正文或 Key：
+
+```bash
+node scripts/generate-provider-comparison.mjs --execute --providers=glm,kimi
+```
+
+该命令会产生真实模型费用并新增两份报告；没有 `--execute` 时必须失败关闭。新报告的文件名会附加 `GLM 5.2` 或 `Kimi K3`，便于在管理后台区分。
+
 历史日志可能包含旧错误。判断本次发布是否异常时，应结合 PM2 重启时间、最新 PID 和日志时间，不把无时间戳的旧行直接当作当前故障。
 
 ## 6. 常见故障
@@ -155,11 +163,20 @@ pm2 logs bar-raiser-ai --lines 1000 --nostream \
 
 检查 PM2 日志中的错误类型，再由有权限的人核对 `.env` 中的 Provider、模型和 Key。不要打印或复制配置值。AI 失败不应创建报告或源文件。
 
+当前 OpenAI 兼容 Provider 的切换值与默认模型为：
+
+- `AI_PROVIDER=doubao`：`doubao-seed-2-1-pro-260628`
+- `AI_PROVIDER=deepseek`：`deepseek-v4-flash`
+- `AI_PROVIDER=glm`：`glm-5.2`，`GLM_REASONING_EFFORT=max`
+- `AI_PROVIDER=kimi`：`kimi-k3`，`KIMI_REASONING_EFFORT=max`
+
+Doubao、GLM 与 Kimi 都使用服务端流式接收并聚合最终正文，忽略模型思考内容；浏览器仍等待完整报告。默认 SDK 超时为 600 秒，自动重试为 0，避免失败时重复计费。GLM 的默认 Base URL 是 `https://open.bigmodel.cn/api/paas/v4`，Kimi 开放平台默认 Base URL 是 `https://api.moonshot.cn/v1`。
+
 ### 分析返回 504
 
-先区分两类 504：Nginx access/error log 在约 60 秒出现 `upstream timed out`，通常说明 `/api/analyze` 未命中 660 秒专用代理超时；PM2 结构化日志出现 `AI_UPSTREAM_TIMEOUT`，说明应用已等待模型 600 秒仍未完成。前者检查 `nginx -T` 中 `/api/analyze` 的 `proxy_read_timeout`，后者检查 DeepSeek 状态与请求规模。不要通过无限放大超时掩盖持续的模型异常。
+先区分两类 504：Nginx access/error log 在约 60 秒出现 `upstream timed out`，通常说明 `/api/analyze` 未命中 660 秒专用代理超时；PM2 结构化日志出现 `AI_UPSTREAM_TIMEOUT`，说明应用已等待模型 600 秒仍未完成。前者检查 `nginx -T` 中 `/api/analyze` 的 `proxy_read_timeout`，后者检查当前 Provider 状态与请求规模。不要通过无限放大超时掩盖持续的模型异常。
 
-客户端断开会取消仍在途的 DeepSeek 请求，但并发锁要等上游 Promise 结束后才释放。看到 `AI_REQUEST_CANCELLED` 时应先判断用户刷新、关闭页面或网络中断，不当作模型 504。
+客户端断开会取消仍在途的模型请求，但并发锁要等上游 Promise 结束后才释放。看到 `AI_REQUEST_CANCELLED` 时应先判断用户刷新、关闭页面或网络中断，不当作模型 504。
 
 ### 接口返回 429
 
