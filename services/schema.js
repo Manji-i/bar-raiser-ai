@@ -1,3 +1,5 @@
+import { initializeMaterialSchema } from './materialJobs.js';
+
 export const ensureColumn = (database, table, column, definition) => {
   const columns = database.prepare(`PRAGMA table_info(${table})`).all();
   if (!columns.some((item) => item.name === column)) {
@@ -28,6 +30,7 @@ export const initializeSchema = (database) => {
     ensureColumn(database, 'reports', 'analysis_mode', "TEXT NOT NULL DEFAULT 'recruiter'");
     ensureColumn(database, 'reports', 'job_description', 'TEXT');
     ensureColumn(database, 'reports', 'resume_text', 'TEXT');
+    initializeMaterialSchema(database);
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');

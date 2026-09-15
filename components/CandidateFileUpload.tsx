@@ -7,6 +7,9 @@ import {
 import type { CandidateAnalysisInput, ResumeParseStatus } from '../types';
 import { parseFile, parseFileWithMetadata } from '../services/fileParser';
 import { assessParseQuality } from '../services/parseQuality';
+import RecordingImport from './RecordingImport';
+import { Button } from './ui';
+import { effectiveCharacterCount, type ImportedMaterial } from '../services/materialClient';
 
 interface CandidateFileUploadProps {
   onStartAnalysis: (input: CandidateAnalysisInput) => void;
@@ -47,9 +50,10 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
   const [resumeText, setResumeText] = useState('');
   const [resumeParseStatus, setResumeParseStatus] = useState<ResumeParseStatus>('not_provided');
   const [showResumeEditor, setShowResumeEditor] = useState(false);
-  const [activeTab, setActiveTab] = useState<'upload' | 'text'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'text' | 'recording'>('upload');
   const [interviewFile, setInterviewFile] = useState<ParsedInterviewFile | null>(null);
   const [textInput, setTextInput] = useState('');
+  const [importedMaterial, setImportedMaterial] = useState<ImportedMaterial | null>(null);
   const [isParsingResume, setIsParsingResume] = useState(false);
   const [isParsingInterview, setIsParsingInterview] = useState(false);
   const [dragTarget, setDragTarget] = useState<'resume' | 'interview' | null>(null);
@@ -122,19 +126,13 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
   };
 
   const validateStepTwo = () => {
-    if (activeTab === 'upload') {
-      if (!interviewFile) {
-        setError('请先上传面试记录文件。');
-        return false;
-      }
-      return true;
-    }
-    if (!textInput.trim()) {
-      setError('请输入面试记录内容。');
+    const content = activeTab === 'recording' ? importedMaterial?.content : activeTab === 'upload' ? interviewFile?.content : textInput;
+    if (!content) {
+      setError(activeTab === 'recording' ? '请先保存并确认逐字稿。' : '请上传或粘贴面试记录。');
       return false;
     }
-    if (textInput.trim().split(/\s+/).length < 10) {
-      setError('面试记录内容过短，无法进行有效分析。');
+    if (effectiveCharacterCount(content) < 20) {
+      setError('面试记录内容过短，请至少提供 20 个有效字符。');
       return false;
     }
     return true;
@@ -153,8 +151,9 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
       analysisMode: 'candidate',
       jobTitle: jobTitle.trim(),
       jobDescription: jobDescription.trim(),
-      transcript: activeTab === 'upload' ? interviewFile!.content : textInput,
-      fileName: activeTab === 'upload' ? interviewFile!.name : '粘贴的面试记录',
+      transcript: activeTab === 'recording' ? importedMaterial!.content : activeTab === 'upload' ? interviewFile!.content : textInput,
+      materialId: activeTab === 'recording' ? importedMaterial?.materialId : undefined,
+      fileName: activeTab === 'recording' ? importedMaterial!.name : activeTab === 'upload' ? interviewFile!.name : '粘贴的面试记录',
       resumeFile,
       resumeText,
       resumeParseStatus,
@@ -170,8 +169,8 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
     else processInterview(file);
   }, []);
 
-  const transcript = activeTab === 'upload' ? interviewFile?.content ?? '' : textInput;
-  const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length;
+  const transcript = activeTab === 'recording' ? importedMaterial?.content ?? '' : activeTab === 'upload' ? interviewFile?.content ?? '' : textInput;
+  const wordCount = effectiveCharacterCount(transcript);
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -308,12 +307,15 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
 
         {step === 2 && (
           <div>
-            <div className="flex border-b border-slate-200" role="tablist">
-              <button type="button" onClick={() => { setActiveTab('upload'); setError(null); }} className={`flex-1 px-4 py-3 text-sm ${activeTab === 'upload' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}>上传文件</button>
-              <button type="button" onClick={() => { setActiveTab('text'); setError(null); }} className={`flex-1 px-4 py-3 text-sm ${activeTab === 'text' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}>粘贴文本</button>
+            <div className="flex flex-wrap gap-2 border-b border-slate-200 p-3" role="tablist">
+              <button type="button" onClick={() => { setActiveTab('upload'); setImportedMaterial(null); setError(null); }} className={`flex-1 px-4 py-3 text-sm ${activeTab === 'upload' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}>上传文件</button>
+              <button type="button" onClick={() => { setActiveTab('text'); setImportedMaterial(null); setError(null); }} className={`flex-1 px-4 py-3 text-sm ${activeTab === 'text' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}>粘贴文本</button>
+              <Button type="button" variant={activeTab === 'recording' ? 'primary' : 'secondary'} onClick={() => { setActiveTab('recording'); setError(null); }}>录音 / 飞书妙记</Button>
             </div>
             <div className="p-6 md:p-8">
-              {activeTab === 'upload' ? (
+              {activeTab === 'recording' ? (
+                <RecordingImport mode="candidate" onImported={setImportedMaterial} onInvalidated={() => setImportedMaterial(null)} />
+              ) : activeTab === 'upload' ? (
                 <div
                   onDragOver={(event) => { event.preventDefault(); setDragTarget('interview'); }}
                   onDragLeave={() => setDragTarget(null)}
@@ -365,7 +367,7 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
               <SummaryItem label="目标职位" value={jobTitle} />
               <SummaryItem label="JD" value={jobDescription || '未提供，将按目标岗位常见要求辅助判断'} />
               <SummaryItem label="简历" value={resumeFile ? `${resumeFile.name} · ${parseStatusCopy[resumeParseStatus]}` : '未提供'} />
-              <SummaryItem label="面试记录" value={`${activeTab === 'upload' ? interviewFile?.name : '粘贴文本'} · 约 ${wordCount} 词`} />
+              <SummaryItem label="面试记录" value={`${activeTab === 'recording' ? importedMaterial?.name : activeTab === 'upload' ? interviewFile?.name : '粘贴文本'} · ${wordCount} 个有效字符`} />
             </div>
             <div className="mt-5 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-500 leading-relaxed">
               报告将主要依据面试记录，按“面试官真实追问 ＞ JD 明确要求 ＞ 目标岗位常见要求”识别重点；简历只用于补充背景和重组真实示范。

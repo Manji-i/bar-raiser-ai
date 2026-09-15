@@ -42,6 +42,12 @@ import {
   isAllowedOrigin,
 } from './services/httpSecurity.js';
 import { createAiService } from './services/aiService.js';
+import { db, DATA_DIR } from './services/db.js';
+import { createMaterialStore } from './services/materialJobs.js';
+import { createMaterialManager, digest } from './services/materialManager.js';
+import { createAsrProvider } from './services/materialAudio.js';
+import { createFeishuMinutesService } from './services/feishuMinutes.js';
+import { createMaterialRouter } from './services/materialRoutes.js';
 import { createAnalysisTelemetry } from './services/analysisTelemetry.js';
 import {
   bindClientDisconnect,
@@ -55,6 +61,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = getListenHost();
 const aiService = createAiService();
+const materialStore = createMaterialStore(db);
+const feishuMinutes = createFeishuMinutesService();
+const asrProvider = createAsrProvider();
+const materialManager = createMaterialManager({ store: materialStore, root: path.join(DATA_DIR, 'uploads', 'audio'), asr: asrProvider, feishu: feishuMinutes });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -161,8 +171,8 @@ const resumeUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
     files: 1,
-    fields: 7,
-    parts: 8,
+    fields: 8,
+    parts: 9,
     fieldSize: 200 * 1024,
     fileSize: 10 * 1024 * 1024,
   },
@@ -259,6 +269,7 @@ app.post('/api/auth/token', limitLogin, async (req, res) => {
 
 app.post('/api/auth/logout', authenticate, (req, res) => {
   try {
+    feishuMinutes.disconnect(digest(req.sessionToken));
     userService.logout(req.sessionToken);
     res.clearCookie(SESSION_COOKIE_NAME, clearCookieOptions(req.secure));
     res.json({ success: true });
@@ -272,10 +283,19 @@ app.get('/api/auth/me', authenticate, (req, res) => {
 });
 
 // Analyze Interview (需要认证)
+app.use('/api', createMaterialRouter({ authenticate, store: materialStore, manager: materialManager, feishu: feishuMinutes, asr: asrProvider }));
+
 app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, res) => {
   console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${aiService.provider}`);
   let disconnectController = null;
   try {
+    if (req.body.materialId) {
+      if (typeof req.body.materialId !== 'string' || req.body.materialId.length !== 36) return res.status(400).json({ error: '材料编号无效。' });
+      const material = materialStore.forAnalysis(req.body.materialId, req.user.id, normalizeAnalysisMode(req.body.analysisMode));
+      if (req.body.transcript !== material.transcript) return res.status(409).json({ code: 'MATERIAL_CHANGED', error: '文字已更新，请重新确认材料后分析。' });
+      req.body.transcript = material.transcript;
+      req.body.fileName = material.fileName;
+    }
     const analysisMode = validateAnalysisRequest(req.body);
     const resumeParseStatus = req.body.resumeParseStatus || (req.file ? null : 'not_provided');
 
@@ -342,8 +362,9 @@ app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, 
             resumeText: analysisMode === 'candidate' ? req.body.resumeText : null,
             transcript: req.body.transcript,
             result: resultText
-          }, req.user.id, attachment);
-
+          }, req.user.id, attachment, req.body.materialId
+            ? reportId => materialStore.linkReport(req.body.materialId, req.user.id, analysisMode, req.body.transcript, reportId)
+            : null);
           return { result: resultText, reportId: report.id };
         } catch (persistError) {
           if (attachment) {
@@ -428,6 +449,8 @@ app.delete('/api/reports/:id', authenticate, async (req, res) => {
   const attachments = reportService.getAttachments(req.params.id);
   const success = reportService.delete(req.params.id, req.user.id, req.user.isAdmin);
   if (success) {
+    try { await materialManager.deleteReportSources(req.params.id); }
+    catch { console.error('Material cleanup pending'); }
     await Promise.all(attachments.map(async (attachment) => {
       try {
         await reportAttachmentService.deleteAttachmentFile(attachment.relativePath);
@@ -559,6 +582,10 @@ app.use((req, res) => {
 export { app };
 
 if (process.argv[1] === __filename) {
+  const materialTick = setInterval(() => { void materialManager.tick().catch(() => console.error('Material worker failed')); }, 2000);
+  const materialCleanup = setInterval(() => { void materialManager.cleanup().catch(() => console.error('Material cleanup failed')); }, 60000);
+  materialTick.unref();
+  materialCleanup.unref();
   app.listen(PORT, HOST, () => {
     console.log(`Server is running on ${HOST}:${PORT}`);
     console.log(`AI Provider: ${aiService.provider}`);

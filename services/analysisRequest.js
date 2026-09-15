@@ -13,6 +13,7 @@ export const ANALYSIS_LIMITS = Object.freeze({
   transcript: 100000,
   resumeText: 100000,
   fileName: 255,
+  materialId: 36,
 });
 
 const ANALYSIS_FIELD_LABELS = Object.freeze({
@@ -22,6 +23,7 @@ const ANALYSIS_FIELD_LABELS = Object.freeze({
   transcript: 'Transcript',
   resumeText: 'Resume text',
   fileName: 'File name',
+  materialId: 'Material id',
 });
 
 const requireText = (data, fields) => {

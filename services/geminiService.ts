@@ -36,6 +36,7 @@ export const buildAnalysisRequest = (
   if (input.analysisMode === 'candidate' && input.resumeFile) {
     const body = new FormData();
     body.set('analysisMode', input.analysisMode);
+    if (input.materialId) body.set('materialId', input.materialId);
     body.set('jobTitle', input.jobTitle);
     body.set('jobDescription', input.jobDescription);
     body.set('transcript', input.transcript);
@@ -50,6 +51,7 @@ export const buildAnalysisRequest = (
   const body = input.analysisMode === 'candidate'
     ? JSON.stringify({
       analysisMode: input.analysisMode,
+      materialId: input.materialId,
       jobTitle: input.jobTitle,
       jobDescription: input.jobDescription,
       transcript: input.transcript,

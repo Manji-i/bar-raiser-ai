@@ -6,7 +6,7 @@
 
 ## 技术栈
 
-- 前端：React、TypeScript、Vite、React Router、Tailwind CDN、lucide-react
+- 前端：React、TypeScript、Vite、React Router、构建期 Tailwind CSS、lucide-react
 - 后端：Node.js ESM、Express
 - AI 服务：Google Gemini 或豆包 Ark，按环境变量 `AI_PROVIDER` 切换
 - 存储：SQLite（Node 内置 `node:sqlite`），数据库文件 `data/app.db`，连接和建表见 `services/db.js`
@@ -31,7 +31,7 @@
 - 不读取、不打印、不提交 `.env.local`、`.env` 或任何真实密钥文件。
 - `.env.production` 当前作为仓库模板文件存在；不要读取其内容，修改前必须先确认，且不得写入真实密钥。
 - 不把 API Key、token、密码、候选人面试原文写入代码、日志、提交信息或文档。
-- `data/app.db` 包含密码哈希、会话 token（`users`/`tokens` 表）和候选人材料（`reports`/`feedback`/`report_attachments` 表）。默认只查看表结构和行数，不展开内容。
+- `data/app.db` 包含密码哈希、会话 Token 摘要及已失效的历史明文 Token（`users`/`tokens` 表），以及候选人材料（`reports`/`feedback`/`report_attachments` 表）。默认只查看表结构和行数，不展开内容。
 - `data/uploads/resumes/` 保存候选人简历源文件；不得读取正文、复制到静态目录或绕过 `/api/reports/:id/resume` 权限接口访问。
 - `data/*.migrated.bak` 是 JSON 存储时代的迁移备份，同样按敏感数据处理。
 - 修改 `.env*`、密钥、token、部署环境变量前必须先停下来确认。
@@ -90,7 +90,7 @@
 ### 单一来源
 
 - `components/ui.tsx`：视觉基元层。按钮用 `Button`（`primary` 品牌渐变 / `secondary` 白底 / `danger` / `icon`）、卡片用 `Card`、输入框用 `Input`、评分徽章用 `ScoreBadge`、图标容器用 `IconTile`；品牌渐变常量 `BRAND_GRADIENT`、评分配色 `getScoreBadgeClass` 也从这里导出。
-- `index.html` 内联 Tailwind 配置：`brand` 色板（唯一的 design token）和 Inter 字体。
+- `tailwind.config.cjs`：`brand` 色板（唯一的 design token）和 Tailwind 扫描范围；`src/index.css`：本地 Inter 字体与全局基础样式。
 - 新增页面或组件必须使用 `components/ui.tsx` 的基元；出现新的通用视觉元素时先沉淀到 `ui.tsx`，不要在页面里另写一套。
 
 ### 风格总则
@@ -111,20 +111,28 @@
 
 - 禁止用 emoji 代替图标；图标统一使用 lucide-react（按钮内 `w-4 h-4`、卡片内 `w-5 h-5`）。
 - 禁止引入 brand/slate 之外的新强调色；禁止绕开 `ui.tsx` 手写新的按钮、卡片或徽章体系。
-- Tailwind 当前通过 CDN 加载，没有注册 `tailwindcss-animate` 等插件；不要使用 `animate-in`、`fade-in`、`slide-in-*` 等插件类。动效只使用内置动画、CSS transition 或项目已实现的 IntersectionObserver 方案。
+- Tailwind 在构建期生成，当前 `plugins` 为空，没有注册 `tailwindcss-animate`；不要使用 `animate-in`、`fade-in`、`slide-in-*` 等插件类。动效只使用内置动画、CSS transition 或项目已实现的 IntersectionObserver 方案。
 
-修改视觉体系时必须同步更新 `components/ui.tsx`、`index.html` 的 brand 色板和本章节。
+修改视觉体系时必须同步更新 `components/ui.tsx`、`tailwind.config.cjs`、必要的 `src/index.css` 和本章节。
 
 ## 代码注意点
 
-- 认证统一使用 `Authorization: Bearer <token>`。
+- 浏览器认证统一使用同源 HttpOnly Cookie；只有受控的非浏览器集成通过 `/api/auth/token` 获取并发送 `Authorization: Bearer <token>`。
 - 当前登录角色锁是客户端产品约束，不是服务端授权边界；不要把浏览器角色值或请求中的 `analysisMode` 当作可信权限信息。需要强隔离时按 `docs/未来需迭代内容.md` 升级为服务端 token 绑定角色。
 - 普通用户只能访问自己的报告；管理员入口需要后端权限校验。
 - Prompt 相关接口属于高权限能力，新增或调整时必须考虑认证和管理员限制。
 - Recruiter 与 Candidate Prompt 分别存于 `system_prompt` 和 `candidate_system_prompt`；Candidate 首版禁止复用 Recruiter 的反馈自动迭代。
-- 文件解析在浏览器侧完成，PDF worker 配置变化要实际上传 PDF 验证。
+- 文件解析在浏览器侧完成，PDF Worker 或字体配置变化要在冷缓存和真实网络下实际导出验证；版本化字体与带哈希构建资源必须保持长期 `immutable` 缓存，`index.html` 不得强缓存。
 - 简历仅允许 PDF、DOCX、TXT，最大 10 MB；浏览器解析失败仍可保存合法源文件并人工补充文本，低质量文本不得直接进入模型输入。
 - 存储已迁移到 SQLite（`node:sqlite`）。历史 JSON 文件由 `scripts/migrate-to-sqlite.mjs` 一次性导入（幂等，users 表非空则跳过），不要再写回 JSON 存储。
+
+## 录音与妙记材料约定（2026-09-11）
+
+- `services/material*.js`：材料任务、上传和转写调度；`services/feishu*.js`：飞书用户授权和逐字稿导入；`components/RecordingImport.tsx`：双模式共享录音入口。
+- 音频临时文件只放 `data/uploads/audio/<随机任务 id>/`，不得静态托管；用户读文件必须校验所有者，供应商读取使用短时随机凭证，日志不得含凭证或逐字稿。
+- 材料任务保存在 SQLite，原始转写与确认稿分开；分析读取服务端确认稿并检查用户、模式和状态。临时音频最多保留 24 小时；关联报告后保留材料来源信息。
+- 飞书按本站会话隔离，使用用户授权的 `minutes:minutes.transcript:export`，仅读取逐字稿，不用本机 CLI 身份代替网站用户。凭证只保存在服务器内存，过期后重新授权。
+- 服务配置缺失时明确显示未开通；模拟测试不能代替真实 ASR 和飞书授权验收。生产发布前必须完成真实服务联调。
 
 ## 深入文档
 

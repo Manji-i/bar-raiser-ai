@@ -429,11 +429,13 @@ const AppContent: React.FC = () => {
     content: string;
     fileName: string;
     jobTitle: string;
-    competencies: string
+    competencies: string;
+    materialId?: string;
   }) => {
     void runAnalysis({
       analysisMode: 'recruiter',
       transcript: data.content,
+      materialId: data.materialId,
       fileName: data.fileName,
       jobTitle: data.jobTitle,
       competencies: data.competencies,
@@ -491,9 +493,9 @@ const AppContent: React.FC = () => {
                 </div>
 
                 {mode === 'candidate' ? (
-                  <CandidateFileUpload onStartAnalysis={handleCandidateStartAnalysis} isLoading={false} />
+                  <CandidateFileUpload key={user?.id} onStartAnalysis={handleCandidateStartAnalysis} isLoading={false} />
                 ) : (
-                  <FileUpload onStartAnalysis={handleStartAnalysis} isLoading={false} />
+                  <FileUpload key={user?.id} onStartAnalysis={handleStartAnalysis} isLoading={false} />
                 )}
               </div>
             )}

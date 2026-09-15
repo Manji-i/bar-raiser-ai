@@ -1,5 +1,9 @@
 # Eval Bar AI 架构说明
 
+## 录音与飞书妙记迭代
+
+录音与妙记使用独立的 material_jobs 状态机与私有音频目录，确认稿通过 materialId 接入既有分析。详见 [材料链路与配置](audio-minutes-operations.md)。
+
 ## 1. 系统目标
 
 Eval Bar AI 在同一套认证、AI Provider 和报告存储之上提供两种互不混排的分析模式：

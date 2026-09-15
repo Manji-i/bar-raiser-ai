@@ -85,7 +85,7 @@ export const createReportService = (database, createId = uuidv4) => ({
     return rows.map(toAttachment);
   },
 
-  create: (data, userId, attachment = null) => {
+  create: (data, userId, attachment = null, linkMaterial = null) => {
     const analysisMode = data.analysisMode === 'candidate' ? 'candidate' : 'recruiter';
     const newReport = {
       ...data,
@@ -141,11 +141,12 @@ export const createReportService = (database, createId = uuidv4) => ({
       );
     };
 
-    if (attachment) {
+    if (attachment || linkMaterial) {
       database.exec('BEGIN IMMEDIATE');
       try {
         insertReport();
         insertAttachment();
+        linkMaterial?.(newReport.id);
         database.exec('COMMIT');
       } catch (error) {
         database.exec('ROLLBACK');

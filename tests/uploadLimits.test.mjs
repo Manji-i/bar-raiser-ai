@@ -7,8 +7,8 @@ const serverSource = readFileSync(new URL('../server.js', import.meta.url), 'utf
 test('JSON 和 multipart 请求具有固定资源上限', () => {
   assert.match(serverSource, /express\.json\(\{ limit: ['"]512kb['"] \}\)/);
   assert.match(serverSource, /files:\s*1/);
-  assert.match(serverSource, /fields:\s*7/);
-  assert.match(serverSource, /parts:\s*8/);
+  assert.match(serverSource, /fields:\s*8/);
+  assert.match(serverSource, /parts:\s*9/);
   assert.match(serverSource, /fieldSize:\s*200 \* 1024/);
   assert.match(serverSource, /fileSize:\s*10 \* 1024 \* 1024/);
 });

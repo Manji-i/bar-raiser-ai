@@ -31,6 +31,7 @@ export interface FileData {
 export type ResumeParseStatus = 'usable' | 'low_quality' | 'empty' | 'manual' | 'not_provided';
 
 export interface CandidateAnalysisInput {
+  materialId?: string;
   analysisMode: 'candidate';
   jobTitle: string;
   jobDescription: string;
@@ -42,6 +43,7 @@ export interface CandidateAnalysisInput {
 }
 
 export interface RecruiterAnalysisInput {
+  materialId?: string;
   analysisMode: 'recruiter';
   jobTitle: string;
   competencies: string;

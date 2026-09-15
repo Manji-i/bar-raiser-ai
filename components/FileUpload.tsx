@@ -4,9 +4,12 @@ import {
   Save, LayoutTemplate, X, Check, FileText, ClipboardPaste, Sparkles,
 } from 'lucide-react';
 import { parseFile } from '../services/fileParser';
+import RecordingImport from './RecordingImport';
+import { Button } from './ui';
+import { effectiveCharacterCount, type ImportedMaterial } from '../services/materialClient';
 
 interface FileUploadProps {
-  onStartAnalysis: (data: { content: string; fileName: string; jobTitle: string; competencies: string }) => void;
+  onStartAnalysis: (data: { content: string; fileName: string; jobTitle: string; competencies: string; materialId?: string }) => void;
   isLoading: boolean;
 }
 
@@ -38,7 +41,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
   const [jobTitle, setJobTitle] = useState("");
   const [competencies, setCompetencies] = useState("");
   const [textInput, setTextInput] = useState("");
-  const [activeTab, setActiveTab] = useState<'upload' | 'text'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'text' | 'recording'>('upload');
+  const [importedMaterial, setImportedMaterial] = useState<ImportedMaterial | null>(null);
   const [parsedFile, setParsedFile] = useState<ParsedFile | null>(null);
 
   // Template State
@@ -81,20 +85,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
   };
 
   const validateMaterial = (): boolean => {
-    if (activeTab === 'upload') {
-      if (!parsedFile) {
-        setError("请先上传面试记录文件。");
-        return false;
-      }
-      return true;
-    }
-    if (!textInput.trim()) {
-      setError("请输入面试记录内容。");
+    const content = activeTab === 'recording' ? importedMaterial?.content : activeTab === 'upload' ? parsedFile?.content : textInput;
+    if (!content) {
+      setError(activeTab === 'recording' ? '请先保存并确认逐字稿。' : '请上传或粘贴面试记录。');
       return false;
     }
-    const wordCount = textInput.trim().split(/\s+/).length;
-    if (wordCount < 10) {
-      setError("面试记录内容过短，无法进行有效分析。");
+    if (effectiveCharacterCount(content) < 20) {
+      setError('面试记录内容过短，请至少提供 20 个有效字符。');
       return false;
     }
     return true;
@@ -134,9 +131,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
 
   const handleStartAnalysis = () => {
     if (!validateJobProfile() || !validateMaterial()) return;
-    const content = activeTab === 'upload' ? parsedFile!.content : textInput;
-    const fileName = activeTab === 'upload' ? parsedFile!.name : "粘贴的面试记录";
-    onStartAnalysis({ content, fileName, jobTitle, competencies });
+    const content = activeTab === 'recording' ? importedMaterial!.content : activeTab === 'upload' ? parsedFile!.content : textInput;
+    const fileName = activeTab === 'recording' ? importedMaterial!.name : activeTab === 'upload' ? parsedFile!.name : "粘贴的面试记录";
+    onStartAnalysis({ content, fileName, jobTitle, competencies, materialId: activeTab === 'recording' ? importedMaterial?.materialId : undefined });
   };
 
   const goNext = () => {
@@ -186,10 +183,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
   };
 
   // Summary helpers for the review step
-  const materialSource = activeTab === 'upload' ? '上传文件' : '粘贴文本';
-  const materialName = activeTab === 'upload' ? parsedFile?.name : '粘贴的面试记录';
-  const materialWords = (activeTab === 'upload' ? parsedFile?.content || '' : textInput)
-    .trim().split(/\s+/).filter(Boolean).length;
+  const materialSource = activeTab === 'recording' ? '录音 / 飞书妙记' : activeTab === 'upload' ? '上传文件' : '粘贴文本';
+  const materialName = activeTab === 'recording' ? importedMaterial?.name : activeTab === 'upload' ? parsedFile?.name : '粘贴的面试记录';
+  const materialWords = effectiveCharacterCount(activeTab === 'recording' ? importedMaterial?.content || '' : activeTab === 'upload' ? parsedFile?.content || '' : textInput);
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -357,9 +353,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
         {step === 2 && (
           <div>
             {/* Input Method Tabs */}
-            <div className="flex border-b border-slate-100">
+            <div className="flex flex-wrap gap-2 border-b border-slate-100 p-3">
               <button
-                onClick={() => { setActiveTab('upload'); setError(null); }}
+                onClick={() => { setActiveTab('upload'); setImportedMaterial(null); setError(null); }}
                 className={`flex-1 py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2
                   ${activeTab === 'upload' ? 'bg-white text-brand-600 border-b-2 border-brand-600' : 'bg-white text-slate-500 hover:text-slate-700'}`}
               >
@@ -367,17 +363,20 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
                 上传面试记录文件
               </button>
               <button
-                onClick={() => { setActiveTab('text'); setError(null); }}
+                onClick={() => { setActiveTab('text'); setImportedMaterial(null); setError(null); }}
                 className={`flex-1 py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2
                   ${activeTab === 'text' ? 'bg-white text-brand-600 border-b-2 border-brand-600' : 'bg-white text-slate-500 hover:text-slate-700'}`}
               >
                 <Type className="w-4 h-4" />
                 粘贴面试记录文本
               </button>
+              <Button type="button" variant={activeTab === 'recording' ? 'primary' : 'secondary'} onClick={() => { setActiveTab('recording'); setError(null); }}>录音 / 飞书妙记</Button>
             </div>
 
             <div className="p-6 md:p-8">
-              {activeTab === 'upload' ? (
+              {activeTab === 'recording' ? (
+                <RecordingImport mode="recruiter" onImported={setImportedMaterial} onInvalidated={() => setImportedMaterial(null)} />
+              ) : activeTab === 'upload' ? (
                 <div className="space-y-4">
                   <div
                     className={`relative group rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out py-12 px-6 flex flex-col items-center justify-center text-center cursor-pointer
@@ -423,7 +422,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-800 truncate">{parsedFile.name}</p>
                         <p className="text-xs text-slate-500">
-                          {parsedFile.content.trim().split(/\s+/).filter(Boolean).length} 词已解析
+                          {effectiveCharacterCount(parsedFile.content)} 个有效字符已解析
                         </p>
                       </div>
                       <button
@@ -503,7 +502,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
                 <p className="text-sm text-slate-800">
                   <span className="font-medium">{materialSource}</span>
                   {materialName && <span className="text-slate-500"> · {materialName}</span>}
-                  <span className="text-slate-500"> · {materialWords} 词</span>
+                  <span className="text-slate-500"> · {materialWords} 个有效字符</span>
                 </p>
               </div>
             </div>
