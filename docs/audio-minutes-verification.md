@@ -31,7 +31,7 @@
 - 火山语音专用应用 `Eval-Bar-AI-ASR` 使用 App ID `6340636029`，只开通“豆包录音文件识别模型 2.0 标准版”。访问凭证只保存在生产 `.env.local`，未写入代码、提交或本文档。
 - 生产运行参数已启用 `volc.seedasr.auc`，公开回调基址为 `https://evalbar.cn`。真实调用使用 18.45 秒中文合成访谈 WAV；第 2 次查询完成，返回 80 个文字字符、3 个时间片段，并识别出预期短语“招聘分析项目”。
 - 发布前完整备份 `data/` 到 `/root/bar-raiser-ai-backups/data-before-audio-20260917-190737`。生产主机没有执行 Vite 构建；本地 `dist` 经 SHA-256 校验后分阶段上传并原子替换。
-- 生产代码 HEAD 为 `a0096a2412ae1fd6511db27abb4340c3a7d28ab3`，PM2 进程 `bar-raiser-ai` 为 `online`。线上 HTML 加载 `index-DWar3iRz.js`，版本化资源使用一年 `immutable` 缓存，首页 HTML 不强缓存。
+- 生产功能代码版本为 `a0096a2412ae1fd6511db27abb4340c3a7d28ab3`，其后的提交只更新本验收记录；PM2 进程 `bar-raiser-ai` 为 `online`。线上 HTML 加载 `index-DWar3iRz.js`，版本化资源使用一年 `immutable` 缓存，首页 HTML 不强缓存。
 - SQLite `PRAGMA quick_check` 返回 `ok`，`material_jobs` 表存在。Nginx 配置检查通过；`/api/audio-source/` 单独关闭访问日志，并只反向代理到本机服务。
 - 公网冒烟通过：首页和主构建资源返回 200；未登录材料能力接口返回 401；错误的音频短链返回 404；飞书 OAuth 回调与连接入口返回 404。
 - 生产主机部署依赖时因 2 GiB 内存紧张出现服务重启，已在用户授权后通过云控制台正常重启实例。随后以低内存参数完成生产依赖安装，单独安装并校验 Linux `ffmpeg-static`，没有在生产主机构建前端。
