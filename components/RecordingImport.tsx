@@ -119,7 +119,7 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
         <Card compact className="space-y-4">
           <h3 className="text-lg font-semibold tracking-tight text-slate-900">上传面试录音</h3>
           {capabilities.audio.enabled ? <>
-            <p className="text-base text-slate-600">支持 MP3、M4A、WAV、OGG，最大 100 MB、最长 60 分钟。</p>
+            <p className="text-base text-slate-600">支持 MP3、M4A、WAV、OGG，最大 {Math.round(capabilities.audio.maxBytes / 1024 ** 2)} MB、最长 60 分钟。</p>
             <label className="flex items-start gap-3 text-sm leading-6 text-slate-700"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} className="mt-1.5 accent-indigo-500" />我有权使用此材料，并同意上述处理方式。</label>
             <Input aria-label="选择面试录音" type="file" accept=".mp3,.m4a,.wav,.ogg" disabled={!consent || busy} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) upload(file); }} />
           </> : <p className="text-base text-slate-600">录音转写服务尚未配置。你可以继续上传文字文件或粘贴面试记录。</p>}

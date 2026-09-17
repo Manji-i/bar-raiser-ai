@@ -4,7 +4,8 @@ import { Worker } from 'node:worker_threads';
 import path from 'node:path';
 import { materialError } from './materialJobs.js';
 
-export const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
+export const MAX_AUDIO_MB = 500;
+export const MAX_AUDIO_BYTES = MAX_AUDIO_MB * 1024 * 1024;
 export const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
 export const MAX_AUDIO_SECONDS = 3600;
 export const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.ogg'];
@@ -27,7 +28,7 @@ export async function prepareAudio(filePath, fileName, { signal } = {}) {
   signal?.throwIfAborted();
   const ext = validateAudioName(fileName);
   const info = await stat(filePath);
-  if (!info.size || info.size > MAX_AUDIO_BYTES) throw materialError('AUDIO_SIZE', '录音须在 100 MB 以内且不能为空。', 413);
+  if (!info.size || info.size > MAX_AUDIO_BYTES) throw materialError('AUDIO_SIZE', `录音须在 ${MAX_AUDIO_MB} MB 以内且不能为空。`, 413);
   const file = await open(filePath, 'r');
   const head = Buffer.alloc(32);
   try { await file.read(head, 0, 32, 0); } finally { await file.close(); }

@@ -20,6 +20,15 @@ async function fixture(t, overrides={}) {
   const args={store,root,asr,feishu,now:()=>time,env:{AUDIO_PUBLIC_BASE_URL:'https://evalbar.cn'},prepare:async(file)=>({filePath:file,format:'wav',durationSeconds:5})};
   return {store,root,manager:createMaterialManager(args),restart:()=>createMaterialManager(args),advance:n=>{time+=n;},counts:()=>({submits,queries})};
 }
+test('录音上传接受 500 MB 边界并拒绝更大的文件', async t => {
+  const f = await fixture(t);
+  const accepted = await f.manager.createAudio('within-limit', { analysisMode: 'candidate', fileName: 'interview.wav', sizeBytes: 100 * 1024 * 1024 + 1 });
+  assert.equal(accepted.sizeBytes, 100 * 1024 * 1024 + 1);
+  await assert.rejects(
+    f.manager.createAudio('over-limit', { analysisMode: 'candidate', fileName: 'interview.wav', sizeBytes: 500 * 1024 * 1024 + 1 }),
+    error => error.code === 'AUDIO_SIZE' && /500 MB/.test(error.message),
+  );
+});
 test('集中重试同样受全局二十个在途任务上限限制', async t => {
   const f = await fixture(t);
   const jobs = [];

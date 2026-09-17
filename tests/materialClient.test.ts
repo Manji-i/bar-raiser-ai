@@ -82,7 +82,8 @@ test('中文无空格的材料可按有效字符判断，空白不计数', () =>
 
 test('音频校验拒绝空文件、超限和非支持后缀', () => {
   assert.match(validateAudioFile({ name: 'a.mp3', size: 0 })!, /空/);
-  assert.match(validateAudioFile({ name: 'a.mp3', size: 104857601 })!, /100/);
+  assert.equal(validateAudioFile({ name: 'a.mp3', size: 100 * 1024 * 1024 + 1 }), null);
+  assert.match(validateAudioFile({ name: 'a.mp3', size: 500 * 1024 * 1024 + 1 })!, /500/);
   assert.match(validateAudioFile({ name: 'a.mp4', size: 3 })!, /MP3/);
   assert.equal(validateAudioFile({ name: 'a.M4A', size: 3 }), null);
 });

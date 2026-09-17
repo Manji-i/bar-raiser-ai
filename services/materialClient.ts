@@ -24,11 +24,12 @@ export interface MaterialCapabilities {
 }
 export interface ImportedMaterial { name: string; content: string; materialId: string }
 export const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
+export const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
 export const effectiveCharacterCount = (value: string) => Array.from(value.replace(/\s/g, '')).length;
 export function validateAudioFile(file: { name: string; size: number }): string | null {
   if (!/\.(mp3|wav|m4a|ogg)$/i.test(file.name)) return '仅支持 MP3、M4A、WAV 或 OGG 音频文件。';
   if (!file.size) return '音频文件为空，请重新选择。';
-  if (file.size > 100 * 1024 * 1024) return '音频文件不能超过 100 MB。';
+  if (file.size > MAX_AUDIO_BYTES) return '音频文件不能超过 500 MB。';
   return null;
 }
 const roleLabels: Record<SpeakerRole, string> = { candidate: '候选人', interviewer: '面试官', unknown: '身份待确认' };

@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, open, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { materialError, publicMaterial } from './materialJobs.js';
-import { AUDIO_CHUNK_BYTES, MAX_AUDIO_BYTES, prepareAudio, validateAudioName } from './materialAudio.js';
+import { AUDIO_CHUNK_BYTES, MAX_AUDIO_BYTES, MAX_AUDIO_MB, prepareAudio, validateAudioName } from './materialAudio.js';
 
 export const digest = value => createHash('sha256').update(value).digest('hex');
 export const createMaterialManager = ({ store, root, asr, feishu, env = process.env, prepare = prepareAudio, now = Date.now }) => {
@@ -24,7 +24,7 @@ export const createMaterialManager = ({ store, root, asr, feishu, env = process.
     async createAudio(userId, data) {
       if (!asr.isEnabled()) throw materialError('ASR_NOT_CONFIGURED', '录音转写尚未开通，请联系管理员。', 503);
       validateAudioName(data.fileName);
-      if (!Number.isInteger(data.sizeBytes) || data.sizeBytes <= 0 || data.sizeBytes > MAX_AUDIO_BYTES) throw materialError('AUDIO_SIZE', '录音须在 100 MB 以内且不能为空。', 413);
+      if (!Number.isInteger(data.sizeBytes) || data.sizeBytes <= 0 || data.sizeBytes > MAX_AUDIO_BYTES) throw materialError('AUDIO_SIZE', `录音须在 ${MAX_AUDIO_MB} MB 以内且不能为空。`, 413);
       const job = store.create(userId, { analysisMode: data.analysisMode, source: 'audio', fileName: data.fileName, sizeBytes: data.sizeBytes });
       try { await mkdir(directory(job.id), { recursive: true, mode: 0o700 }); }
       catch (e) { fail(job.id, e); throw materialError('AUDIO_STORAGE', '暂时无法保存录音，请稍后重试。', 503); }

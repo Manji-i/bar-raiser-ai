@@ -16,7 +16,7 @@ for(const mode of ['candidate','recruiter']) {
  await page.route('**/api/**',async route=>{
  const request=route.request(), path=new URL(request.url()).pathname; let data={};
  if(path.startsWith('/api/auth/')) data={user:{id:'browser-synthetic-user',username:'合成测试',email:null,isAdmin:false}};
- else if(path==='/api/materials/capabilities') data={audio:{enabled,maxBytes:104857600,maxDurationSeconds:3600,extensions:['.mp3','.wav','.m4a','.ogg']}};
+ else if(path==='/api/materials/capabilities') data={audio:{enabled,maxBytes:500*1024*1024,maxDurationSeconds:3600,extensions:['.mp3','.wav','.m4a','.ogg']}};
  else if(path==='/api/materials') data=job?[job]:[];
  else if(path==='/api/materials/audio') {const body=request.postDataJSON(); job={id:'00000000-0000-4000-8000-000000000001',analysisMode:mode,source:'audio',status:'uploading',fileName:body.fileName,transcript:'',segments:[],speakerRoles:{},confirmed:false,error:null,createdAt:Date.now(),expiresAt:Date.now()+86400000,sizeBytes:body.sizeBytes,uploadedBytes:0};data=job;}
  else if(path.endsWith('/submit')) {job={...job,status:'ready',transcript:'请介绍一个项目。我负责用户访谈并改进产品流程，提高了用户使用效率。',segments:[{speaker:'A',startMs:0,endMs:1000,text:'请介绍一个项目。'},{speaker:'B',startMs:1000,endMs:4000,text:'我负责用户访谈并改进产品流程，提高了用户使用效率。'}]};data=job;}
@@ -34,6 +34,7 @@ for(const mode of ['candidate','recruiter']) {
  if(mode==='candidate') {await page.getByPlaceholder('例如：高级产品经理').fill('产品经理'); await page.getByRole('button',{name:/下一步：面试记录/}).click();}
  else {await page.getByPlaceholder('例如：高级前端工程师、销售总监').fill('产品经理');await page.getByPlaceholder('例如：1. 系统设计 2. 领导力 3. 冲突处理...').fill('产品判断');await page.getByRole('button',{name:/下一步：面试材料/}).click();}
  await page.getByRole('button',{name:'上传录音',exact:true}).click();
+ assert.equal(await page.getByText('支持 MP3、M4A、WAV、OGG，最大 500 MB、最长 60 分钟。',{exact:true}).count(),1);
  assert.equal(await page.getByText('飞书妙记',{exact:true}).count(),0);
  assert.equal(await page.getByLabel('飞书妙记链接').count(),0);
  await page.getByRole('checkbox').check();

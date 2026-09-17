@@ -27,7 +27,7 @@
 
 新增 services/materialJobs.js、materialAudio.js、materialRoutes.js；修改 schema.js、server.js、analysisRequest.js；新增对应测试。
 - [x] 内存 SQLite 与临时目录覆盖用户隔离、状态转换、分块幂等和超限。
-- [x] 实现 4 MiB 分块、100 MiB 总限额、随机路径、时长核验和到期清理。
+- [x] 实现 4 MiB 分块、500 MiB 总限额、随机路径、时长核验和到期清理。
 - [x] 按官方契约实现 ASR 提交/查询、结果规范化、有界队列与重启恢复。
 - [x] 按规格接入所有认证接口，供应商只使用短时授权文件地址。
 - [x] 分析前校验材料归属及已确认稿，成功关联报告。
