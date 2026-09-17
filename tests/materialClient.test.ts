@@ -51,14 +51,17 @@ test('已取消上传不再发起任何请求', async () => {
   assert.equal(requests, 0);
 });
 
-test('确认稿逐字保存；重试、放弃与飞书连接使用明确接口', async () => {
+test('确认稿逐字保存，重试与放弃使用明确接口且客户端不暴露飞书操作', async () => {
   const calls: {url: string; init: RequestInit}[] = [];
   const client = createMaterialClient(async (url, init) => { calls.push({url: String(url), init: init!}); return response({}); });
   await client.confirm('a', '  人工修订\n文本  ', { A: 'candidate' });
-  await client.retry('a'); await client.cancel('a'); await client.connect(); await client.disconnect();
+  await client.retry('a'); await client.cancel('a');
   assert.equal(calls[0].init.method, 'PATCH');
   assert.deepEqual(JSON.parse(calls[0].init.body as string), { transcript: '  人工修订\n文本  ', speakerRoles: { A: 'candidate' }, confirmed: true });
-  assert.deepEqual(calls.slice(1).map(c => [c.url, c.init.method]), [['/api/materials/a/retry', 'POST'], ['/api/materials/a/cancel', 'POST'], ['/api/integrations/feishu/connect', 'POST'], ['/api/integrations/feishu', 'DELETE']]);
+  assert.deepEqual(calls.slice(1).map(c => [c.url, c.init.method]), [['/api/materials/a/retry', 'POST'], ['/api/materials/a/cancel', 'POST']]);
+  assert.equal('importFeishu' in client, false);
+  assert.equal('connect' in client, false);
+  assert.equal('disconnect' in client, false);
 });
 
 test('角色文本保留时间戳，未指定角色不会猜为候选人', () => {
@@ -113,10 +116,9 @@ test('服务持续失败时分块最多尝试三次，不自动重复创建收�
   assert.deepEqual(calls, ['/api/materials/audio', ...Array(3).fill('/api/materials/job/chunks/0')]);
 });
 
-test('能力发现、详情和妙记导入准确传递模式与链接', async () => {
+test('能力发现和材料详情准确传递请求路径', async () => {
   const calls: { url: string; init: RequestInit }[] = [];
   const client = createMaterialClient(async (url, init) => { calls.push({url: String(url), init: init!}); return response({}); });
-  await client.capabilities(); await client.get('id/value'); await client.importFeishu('recruiter', 'https://example.feishu.cn/minutes/123');
-  assert.deepEqual(calls.map(c => c.url), ['/api/materials/capabilities', '/api/materials/id%2Fvalue', '/api/materials/feishu']);
-  assert.deepEqual(JSON.parse(calls[2].init.body as string), { analysisMode: 'recruiter', url: 'https://example.feishu.cn/minutes/123' });
+  await client.capabilities(); await client.get('id/value');
+  assert.deepEqual(calls.map(c => c.url), ['/api/materials/capabilities', '/api/materials/id%2Fvalue']);
 });

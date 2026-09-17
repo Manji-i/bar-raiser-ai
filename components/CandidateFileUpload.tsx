@@ -310,7 +310,7 @@ const CandidateFileUpload: React.FC<CandidateFileUploadProps> = ({ onStartAnalys
             <div className="flex flex-wrap gap-2 border-b border-slate-200 p-3" role="tablist">
               <button type="button" onClick={() => { setActiveTab('upload'); setImportedMaterial(null); setError(null); }} className={`flex-1 px-4 py-3 text-sm ${activeTab === 'upload' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}>上传文件</button>
               <button type="button" onClick={() => { setActiveTab('text'); setImportedMaterial(null); setError(null); }} className={`flex-1 px-4 py-3 text-sm ${activeTab === 'text' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}>粘贴文本</button>
-              <Button type="button" variant={activeTab === 'recording' ? 'primary' : 'secondary'} onClick={() => { setActiveTab('recording'); setError(null); }}>录音 / 飞书妙记</Button>
+              <Button type="button" variant={activeTab === 'recording' ? 'primary' : 'secondary'} onClick={() => { setActiveTab('recording'); setError(null); }}>上传录音</Button>
             </div>
             <div className="p-6 md:p-8">
               {activeTab === 'recording' ? (

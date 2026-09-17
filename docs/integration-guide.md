@@ -1,8 +1,8 @@
 # Eval Bar AI 接口接入指南
 
-## 录音与飞书妙记迭代
+## 录音上传迭代
 
-新增录音分块上传、妙记 OAuth、任务查询和确认接口；两种分析请求均可传 materialId，由服务端校验所有者和确认稿。完整契约见 [录音与妙记接口](audio-minutes-operations.md#api-概览)。
+新增录音分块上传、任务查询和确认接口；两种分析请求均可传 materialId，由服务端校验所有者和确认稿。首版不提供飞书妙记 OAuth 或链接导入。完整契约见 [录音接口](audio-minutes-operations.md#api-概览)。
 
 ## 1. 适用范围
 

@@ -283,7 +283,7 @@ app.get('/api/auth/me', authenticate, (req, res) => {
 });
 
 // Analyze Interview (需要认证)
-app.use('/api', createMaterialRouter({ authenticate, store: materialStore, manager: materialManager, feishu: feishuMinutes, asr: asrProvider }));
+app.use('/api', createMaterialRouter({ authenticate, store: materialStore, manager: materialManager, feishu: feishuMinutes, asr: asrProvider, enableFeishu: false }));
 
 app.post('/api/analyze', authenticate, limitAnalysis, uploadResume, async (req, res) => {
   console.log(`[API /api/analyze] Request received. AI_PROVIDER is: ${aiService.provider}`);

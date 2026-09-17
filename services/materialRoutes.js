@@ -4,7 +4,7 @@ import { digest } from './materialManager.js';
 import { parseMinutesUrl } from './feishuMinutes.js';
 import { materialError } from './materialJobs.js';
 
-export const createMaterialRouter = ({ authenticate, store, manager, feishu, asr }) => {
+export const createMaterialRouter = ({ authenticate, store, manager, feishu, asr, enableFeishu = false }) => {
   const router = express.Router();
   const sessionKey = req => digest(req.sessionToken);
   router.use((req, res, next) => { res.set('Cache-Control','no-store'); res.set('Referrer-Policy','no-referrer'); next(); });
@@ -12,28 +12,34 @@ export const createMaterialRouter = ({ authenticate, store, manager, feishu, asr
     const file = manager.providerFile(req.params.id, req.params.key);
     res.type('audio/wav').sendFile(file);
   });
-  router.get('/integrations/feishu/callback', async (req, res) => {
-    res.clearCookie('evalbar_feishu_nonce', { path: '/api/integrations/feishu/callback' });
-    try {
-      await feishu.callback({ state: req.query.state, nonce: req.cookies?.evalbar_feishu_nonce, code: req.query.code, error: req.query.error });
-      res.type('html').send('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>飞书已连接</title><body><h1>飞书已连接</h1><p>请关闭此页面，返回 Eval Bar AI 导入妙记。</p></body></html>');
-    } catch {
-      res.status(400).type('html').send('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>连接未完成</title><body><h1>飞书连接未完成</h1><p>请关闭此页，返回 Eval Bar AI 重新连接，并确认应用使用权限。</p></body></html>');
-    }
-  });
-  router.use((req, res, next) => /^\/(materials|integrations\/feishu)(\/|$)/.test(req.path) ? next() : next('router'));
+  if (enableFeishu) router.get('/integrations/feishu/callback', async (req, res) => {
+      res.clearCookie('evalbar_feishu_nonce', { path: '/api/integrations/feishu/callback' });
+      try {
+        await feishu.callback({ state: req.query.state, nonce: req.cookies?.evalbar_feishu_nonce, code: req.query.code, error: req.query.error });
+        res.type('html').send('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>飞书已连接</title><body><h1>飞书已连接</h1><p>请关闭此页面，返回 Eval Bar AI 导入妙记。</p></body></html>');
+      } catch {
+        res.status(400).type('html').send('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>连接未完成</title><body><h1>飞书连接未完成</h1><p>请关闭此页，返回 Eval Bar AI 重新连接，并确认应用使用权限。</p></body></html>');
+      }
+    });
+  router.use((req, res, next) => /^\/materials(\/|$)/.test(req.path) || (enableFeishu && /^\/integrations\/feishu(\/|$)/.test(req.path)) ? next() : next('router'));
   router.use(authenticate);
   router.use((req, res, next) => {
-    if ((req.method === 'PATCH' || (req.method === 'POST' && ['/materials/audio', '/materials/feishu'].includes(req.path))) && (!req.body || typeof req.body !== 'object' || Array.isArray(req.body))) return next(materialError('INVALID_REQUEST', '请提交有效的材料信息。'));
+    const jsonPostPaths = enableFeishu ? ['/materials/audio', '/materials/feishu'] : ['/materials/audio'];
+    if ((req.method === 'PATCH' || (req.method === 'POST' && jsonPostPaths.includes(req.path))) && (!req.body || typeof req.body !== 'object' || Array.isArray(req.body))) return next(materialError('INVALID_REQUEST', '请提交有效的材料信息。'));
     next();
   });
-  router.get('/materials/capabilities', (req, res) => res.json({ audio: { enabled: asr.isEnabled(), maxBytes: MAX_AUDIO_BYTES, maxDurationSeconds: MAX_AUDIO_SECONDS, extensions: AUDIO_EXTENSIONS }, feishu: { enabled: feishu.isEnabled(), connected: feishu.isConnected(sessionKey(req)) } }));
-  router.post('/integrations/feishu/connect', (req, res) => {
-    const result = feishu.connect(sessionKey(req));
-    res.cookie('evalbar_feishu_nonce', result.nonce, { httpOnly: true, secure: req.secure, sameSite: 'lax', path: '/api/integrations/feishu/callback', maxAge: 300000 });
-    res.json({ url: result.url });
-  });
-  router.delete('/integrations/feishu', (req, res) => { feishu.disconnect(sessionKey(req)); res.json({ success: true }); });
+  router.get('/materials/capabilities', (req, res) => res.json({
+    audio: { enabled: asr.isEnabled(), maxBytes: MAX_AUDIO_BYTES, maxDurationSeconds: MAX_AUDIO_SECONDS, extensions: AUDIO_EXTENSIONS },
+    ...(enableFeishu ? { feishu: { enabled: feishu.isEnabled(), connected: feishu.isConnected(sessionKey(req)) } } : {}),
+  }));
+  if (enableFeishu) {
+    router.post('/integrations/feishu/connect', (req, res) => {
+      const result = feishu.connect(sessionKey(req));
+      res.cookie('evalbar_feishu_nonce', result.nonce, { httpOnly: true, secure: req.secure, sameSite: 'lax', path: '/api/integrations/feishu/callback', maxAge: 300000 });
+      res.json({ url: result.url });
+    });
+    router.delete('/integrations/feishu', (req, res) => { feishu.disconnect(sessionKey(req)); res.json({ success: true }); });
+  }
   router.get('/materials', (req, res) => {
     if (!['candidate','recruiter'].includes(req.query.analysisMode)) throw materialError('INVALID_MODE','分析模式无效。');
     res.json(store.list(req.user.id, req.query.analysisMode));
@@ -44,10 +50,10 @@ export const createMaterialRouter = ({ authenticate, store, manager, feishu, asr
     res.json(await manager.chunk(req.params.id, req.user.id, Number(req.params.index), req.body));
   });
   router.post('/materials/:id/submit', async (req, res) => res.json(await manager.submit(req.params.id, req.user.id)));
-  router.post('/materials/feishu', (req, res) => {
-    parseMinutesUrl(req.body.url);
-    res.status(202).json(manager.importFeishu(req.user.id, sessionKey(req), req.body));
-  });
+  if (enableFeishu) router.post('/materials/feishu', (req, res) => {
+      parseMinutesUrl(req.body.url);
+      res.status(202).json(manager.importFeishu(req.user.id, sessionKey(req), req.body));
+    });
   router.get('/materials/:id', (req, res) => res.json(store.get(req.params.id, req.user.id)));
   router.patch('/materials/:id', (req, res) => res.json(store.confirm(req.params.id, req.user.id, req.body)));
   router.post('/materials/:id/retry', (req, res) => res.json(manager.retry(req.params.id, req.user.id, sessionKey(req))));

@@ -183,7 +183,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
   };
 
   // Summary helpers for the review step
-  const materialSource = activeTab === 'recording' ? '录音 / 飞书妙记' : activeTab === 'upload' ? '上传文件' : '粘贴文本';
+  const materialSource = activeTab === 'recording' ? '上传录音' : activeTab === 'upload' ? '上传文件' : '粘贴文本';
   const materialName = activeTab === 'recording' ? importedMaterial?.name : activeTab === 'upload' ? parsedFile?.name : '粘贴的面试记录';
   const materialWords = effectiveCharacterCount(activeTab === 'recording' ? importedMaterial?.content || '' : activeTab === 'upload' ? parsedFile?.content || '' : textInput);
 
@@ -370,7 +370,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onStartAnalysis, isLoading }) =
                 <Type className="w-4 h-4" />
                 粘贴面试记录文本
               </button>
-              <Button type="button" variant={activeTab === 'recording' ? 'primary' : 'secondary'} onClick={() => { setActiveTab('recording'); setError(null); }}>录音 / 飞书妙记</Button>
+              <Button type="button" variant={activeTab === 'recording' ? 'primary' : 'secondary'} onClick={() => { setActiveTab('recording'); setError(null); }}>上传录音</Button>
             </div>
 
             <div className="p-6 md:p-8">

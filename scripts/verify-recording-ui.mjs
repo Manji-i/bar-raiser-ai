@@ -16,7 +16,7 @@ for(const mode of ['candidate','recruiter']) {
  await page.route('**/api/**',async route=>{
  const request=route.request(), path=new URL(request.url()).pathname; let data={};
  if(path.startsWith('/api/auth/')) data={user:{id:'browser-synthetic-user',username:'合成测试',email:null,isAdmin:false}};
- else if(path==='/api/materials/capabilities') data={audio:{enabled,maxBytes:104857600,maxDurationSeconds:3600,extensions:['.mp3','.wav','.m4a','.ogg']},feishu:{enabled,connected:false}};
+ else if(path==='/api/materials/capabilities') data={audio:{enabled,maxBytes:104857600,maxDurationSeconds:3600,extensions:['.mp3','.wav','.m4a','.ogg']}};
  else if(path==='/api/materials') data=job?[job]:[];
  else if(path==='/api/materials/audio') {const body=request.postDataJSON(); job={id:'00000000-0000-4000-8000-000000000001',analysisMode:mode,source:'audio',status:'uploading',fileName:body.fileName,transcript:'',segments:[],speakerRoles:{},confirmed:false,error:null,createdAt:Date.now(),expiresAt:Date.now()+86400000,sizeBytes:body.sizeBytes,uploadedBytes:0};data=job;}
  else if(path.endsWith('/submit')) {job={...job,status:'ready',transcript:'请介绍一个项目。我负责用户访谈并改进产品流程，提高了用户使用效率。',segments:[{speaker:'A',startMs:0,endMs:1000,text:'请介绍一个项目。'},{speaker:'B',startMs:1000,endMs:4000,text:'我负责用户访谈并改进产品流程，提高了用户使用效率。'}]};data=job;}
@@ -33,7 +33,9 @@ for(const mode of ['candidate','recruiter']) {
  await page.getByRole('button',{name:'登录',exact:true}).click();
  if(mode==='candidate') {await page.getByPlaceholder('例如：高级产品经理').fill('产品经理'); await page.getByRole('button',{name:/下一步：面试记录/}).click();}
  else {await page.getByPlaceholder('例如：高级前端工程师、销售总监').fill('产品经理');await page.getByPlaceholder('例如：1. 系统设计 2. 领导力 3. 冲突处理...').fill('产品判断');await page.getByRole('button',{name:/下一步：面试材料/}).click();}
- await page.getByRole('button',{name:'录音 / 飞书妙记',exact:true}).click();
+ await page.getByRole('button',{name:'上传录音',exact:true}).click();
+ assert.equal(await page.getByText('飞书妙记',{exact:true}).count(),0);
+ assert.equal(await page.getByLabel('飞书妙记链接').count(),0);
  await page.getByRole('checkbox').check();
  await page.getByLabel('选择面试录音').setInputFiles({name:'synthetic.wav',mimeType:'audio/wav',buffer:Buffer.from('synthetic-browser-fixture')});
  await page.getByLabel('逐字稿编辑稿').waitFor();
@@ -63,8 +65,8 @@ for(const mode of ['candidate','recruiter']) {
  job=null;enabled=false; await page.goto(base+`/app/${mode}`);
  if(mode==='candidate'){await page.getByPlaceholder('例如：高级产品经理').fill('产品经理');await page.getByRole('button',{name:/下一步：面试记录/}).click();}
  else {await page.getByPlaceholder('例如：高级前端工程师、销售总监').fill('产品经理');await page.getByPlaceholder('例如：1. 系统设计 2. 领导力 3. 冲突处理...').fill('产品判断');await page.getByRole('button',{name:/下一步：面试材料/}).click();}
- await page.getByRole('button',{name:'录音 / 飞书妙记',exact:true}).click(); await page.getByText('录音转写服务尚未配置。你可以继续上传文字文件或粘贴面试记录。').waitFor();
- await page.getByRole('button',{name:'飞书妙记',exact:true}).click();await page.getByText('飞书妙记导入尚未配置。你可以导出文字文件后上传，或粘贴面试记录。').waitFor(); checks++;
+ await page.getByRole('button',{name:'上传录音',exact:true}).click(); await page.getByText('录音转写服务尚未配置。你可以继续上传文字文件或粘贴面试记录。').waitFor();
+ assert.equal(await page.getByText('飞书妙记',{exact:true}).count(),0); checks++;
  console.log(mode+' browser workflow passed');await context.close();
 }
 console.log(`Browser scenarios passed: ${checks}; provider responses simulated; no external API calls.`);

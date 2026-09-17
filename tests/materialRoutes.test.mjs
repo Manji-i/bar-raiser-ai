@@ -18,7 +18,7 @@ const scope = 'minutes:minutes.transcript:export';
 const syntheticAudio = Buffer.from('synthetic audio fixture');
 const syntheticTranscript = '[Speaker A] 合成面试测试内容';
 
-async function fixture(t) {
+async function fixture(t, { enableFeishu = false } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'evalbar-material-http-'));
   const db = new DatabaseSync(':memory:');
   let server;
@@ -75,7 +75,7 @@ async function fixture(t) {
     req.sessionToken = id === 'owner' ? 'test-session' : `test-session-${id}`;
     next();
   };
-  app.use('/api', createMaterialRouter({ authenticate, store, manager, feishu, asr }));
+  app.use('/api', createMaterialRouter({ authenticate, store, manager, feishu, asr, enableFeishu }));
   server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -105,6 +105,21 @@ async function fixture(t) {
   return { store, manager, request, createAudio, upload, authorize, callback, submissions, queries, feishuCalls, advance: ms => { time += ms; } };
 }
 
+test('首版默认不公开飞书能力和授权导入路由', async t => {
+  const f = await fixture(t);
+  const capabilities = await (await f.request('/materials/capabilities')).json();
+  assert.deepEqual(Object.keys(capabilities), ['audio']);
+  for (const [route, method, json] of [
+    ['/integrations/feishu/connect', 'POST'],
+    ['/integrations/feishu', 'DELETE'],
+    ['/materials/feishu', 'POST', { analysisMode: 'candidate', url: minutesUrl }],
+  ]) await expectError(await f.request(route, { method, json }), 404);
+  await expectError(await f.request('/materials/feishu', { method: 'POST' }), 404);
+  const callback = await f.request('/integrations/feishu/callback?state=fake&code=fake', { user: null });
+  assert.equal(callback.status, 404);
+  assert.equal(f.feishuCalls.length, 0);
+});
+
 async function expectError(response, status, code) {
   assert.equal(response.status, status);
   if (code) assert.equal((await response.json()).code, code);
@@ -112,7 +127,7 @@ async function expectError(response, status, code) {
 }
 
 test('材料和飞书连接路由未登录均返回 401', async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { enableFeishu: true });
   const job = await f.createAudio();
   for (const [route, method, json] of [
     ['/materials/capabilities', 'GET'], ['/materials?analysisMode=candidate', 'GET'],
@@ -196,7 +211,7 @@ test('HTTP 上传至确认的全流程保留修订稿并阻止未确认、跨模
 });
 
 test('错误 JSON、非对象请求和超大分块被拒绝且不改变上传进度', async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { enableFeishu: true });
   const malformed = await f.request('/materials/audio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{' });
   await expectError(malformed, 400);
   await expectError(await f.request('/materials/audio', { method: 'POST', json: [] }), 400, 'INVALID_REQUEST');
@@ -230,7 +245,7 @@ test('供应商仅凭有效 opaque URL 读取音频，错误 token 与完成后�
 });
 
 test('飞书连接设置受限 nonce Cookie，回调校验 state、nonce、单次性及原始用户会话', async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { enableFeishu: true });
   const flow = await f.authorize();
   assert.match(flow.cookie, /HttpOnly/);
   assert.match(flow.cookie, /SameSite=Lax/i);
@@ -257,7 +272,7 @@ test('飞书连接设置受限 nonce Cookie，回调校验 state、nonce、单�
 });
 
 test('飞书回调拒绝缺少或伪造 nonce、未知 state、取消和过期授权', async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { enableFeishu: true });
   for (const variant of ['missing', 'wrong', 'state', 'denied', 'expired']) {
     const flow = await f.authorize();
     if (variant === 'missing') flow.cookiePair = '';
@@ -274,7 +289,7 @@ test('飞书回调拒绝缺少或伪造 nonce、未知 state、取消和过期�
 });
 
 test('飞书链接校验先于导入，只有已连接的本人会话能拉取并确认逐字稿', async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { enableFeishu: true });
   for (const url of ['http://team.feishu.cn/minutes/abcdefghijklmnopqrstuvwx', 'https://feishu.cn.evil.test/minutes/abcdefghijklmnopqrstuvwx', 'https://team.feishu.cn/docx/abcdefghijklmnopqrstuvwx', 'https://team.feishu.cn/other/../minutes/abcdefghijklmnopqrstuvwx']) {
     await expectError(await f.request('/materials/feishu', { method: 'POST', json: { analysisMode: 'candidate', url } }), 400, 'FEISHU_INVALID_URL');
   }

@@ -21,7 +21,6 @@ export interface MaterialJob {
 }
 export interface MaterialCapabilities {
   audio: { enabled: boolean; maxBytes: number; maxDurationSeconds: number; extensions: string[] };
-  feishu: { enabled: boolean; connected: boolean };
 }
 export interface ImportedMaterial { name: string; content: string; materialId: string }
 export const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -77,9 +76,6 @@ export function createMaterialClient(fetcher: typeof fetch = (input, init) => fe
     confirm: (id: string, transcript: string, speakerRoles: Record<string, SpeakerRole>, signal?: AbortSignal) => request<MaterialJob>(jobPath(id), 'PATCH', { transcript, speakerRoles, confirmed: true }, signal),
     retry: (id: string, signal?: AbortSignal) => request<MaterialJob>(`${jobPath(id)}/retry`, 'POST', undefined, signal),
     cancel: (id: string, signal?: AbortSignal) => request<MaterialJob>(`${jobPath(id)}/cancel`, 'POST', undefined, signal),
-    importFeishu: (analysisMode: AnalysisMode, url: string, signal?: AbortSignal) => request<MaterialJob>('/materials/feishu', 'POST', { analysisMode, url }, signal),
-    connect: (signal?: AbortSignal) => request<{ url: string }>('/integrations/feishu/connect', 'POST', undefined, signal),
-    disconnect: (signal?: AbortSignal) => request('/integrations/feishu', 'DELETE', undefined, signal),
     async uploadAudio(file: File, analysisMode: AnalysisMode, options: { signal?: AbortSignal; onJob?: (job: MaterialJob) => void; onProgress?: (bytes: number) => void } = {}) {
       const validation = validateAudioFile(file);
       if (validation) throw new Error(validation);

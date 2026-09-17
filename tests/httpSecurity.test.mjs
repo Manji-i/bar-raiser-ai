@@ -59,3 +59,7 @@ test('Express 关闭宽松 CORS、技术指纹和 API HTML 回退', () => {
   assert.match(serverSource, /Registration failed/);
   assert.match(serverSource, /setHeaders:\s*applyStaticAssetCacheHeaders/);
 });
+
+test('生产装配显式关闭飞书材料路由', () => {
+  assert.match(serverSource, /createMaterialRouter\(\{[^}]*enableFeishu:\s*false[^}]*\}\)/s);
+});

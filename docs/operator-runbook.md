@@ -1,8 +1,8 @@
 # Eval Bar AI 运维手册
 
-## 录音与飞书妙记迭代
+## 录音上传迭代
 
-录音功能涉及平台对应 ffmpeg 二进制、短时媒体 URL 日志过滤、单实例任务调度和 material_jobs 表。发布前按 [录音与妙记运维清单](audio-minutes-operations.md) 完成专用配置与真实服务联调。
+录音功能涉及平台对应 ffmpeg 二进制、短时媒体 URL 日志过滤、单实例任务调度和 material_jobs 表。发布前按 [录音运维清单](audio-minutes-operations.md) 完成专用 ASR 配置与真实服务联调。飞书妙记首版不启用。
 
 ## 1. 生产事实
 

@@ -1,8 +1,8 @@
 # Eval Bar AI 架构说明
 
-## 录音与飞书妙记迭代
+## 录音上传迭代
 
-录音与妙记使用独立的 material_jobs 状态机与私有音频目录，确认稿通过 materialId 接入既有分析。详见 [材料链路与配置](audio-minutes-operations.md)。
+所有已登录用户在候选人和招聘方工作台均可上传录音。录音使用独立的 material_jobs 状态机与私有音频目录，确认稿通过 materialId 接入既有分析。首版不公开飞书妙记入口和接口。详见 [录音链路与配置](audio-minutes-operations.md)。
 
 ## 1. 系统目标
 
