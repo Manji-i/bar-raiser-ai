@@ -1,5 +1,14 @@
 # Eval Bar AI 当前交接状态
 
+## 2026-09-20 已发布：依赖与 Node 隔离升级
+
+- 生产与开发依赖漏洞已升级：`react-router-dom` / `react-router` 为 `7.18.4`、`qs` 为 `6.16.0`、`@xmldom/xmldom` 为 `0.8.15`、`nanoid` 为 `3.3.19`；完整 `npm audit` 为 0。
+- Eval Bar 独立使用 `/opt/node-v22.23.2/bin/node`，稳定入口为 `/opt/node-evalbar-current/bin/node`；系统 `/usr/bin/node` 保持 `v22.22.0`，博客及 PM2 守护进程未切换。
+- PM2 将独立 Node 二进制作为 `script path`，以 `interpreter: none` 传入 `server.js`；`/proc/<pid>/exe` 已回读为 `/opt/node-v22.23.2/bin/node`。
+- 本地与生产均为 180/180 测试通过；本地生产构建成功；线上首页、主资源、PDF Worker 和字体为 `200`，未登录报告接口为 `401`，公网 `3000` 拒绝连接。
+- 当前生产与 GitHub 对应提交为 `b7e93e3642bc96ee72d91fe11ff5a1ced88ffa44`；首页主资源为 `/assets/index-4DOGG6Nd.js`。
+- 发布备份：`/root/bar-raiser-ai-backups/data-before-node-20260920-163819`、`/root/bar-raiser-ai-backups/pm2-dump-before-node-20260920-163819.pm2`、`/root/bar-raiser-ai-backups/dist-before-fa9c6b2`。
+
 ## 2026-09-20 已发布：优先安全加固
 
 - 文件权限：生产 Node 实际进程使用 `0077` umask，项目私有目录和敏感文件已分别收紧为 `0700`、`0600`；`www-data` 回读验证被拒绝。
@@ -20,8 +29,8 @@
 - 线上地址：`https://evalbar.cn/`；Node 的 `127.0.0.1:3000` 仅供本机 Nginx 反代。
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
-- 当前生产核心代码：`d0e0052a2edd6b3a06f4729a2dd9aa6f00b00c51`
-- 当前首页资源：`/assets/index-CaJa9-5-.js`、`/assets/index-Ba3jjskP.css`
+- 当前生产代码：`b7e93e3642bc96ee72d91fe11ff5a1ced88ffa44`
+- 当前首页资源：`/assets/index-4DOGG6Nd.js`、`/assets/index-Ba3jjskP.css`
 - 2026-08-05 DeepSeek 发布前数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-185421`
 - 2026-08-05 DeepSeek 发布前环境配置备份：`/root/bar-raiser-ai-backups/env-local-before-20260805-185421`
 - 2026-08-05 DeepSeek 发布前 Nginx 配置备份：`/root/bar-raiser-ai-backups/evalbar-nginx-before-20260805-185421`
@@ -121,7 +130,8 @@ Prompt Injection 只能分层缓解；历史 SHA-256 密码哈希按“不改现
 
 ## 当前技术债
 
-- `npm audit` 仍报告 2 个 high，均来自 React Router RSC Action 公告 `GHSA-qwww-vcr4-c8h2`；当前只使用 `BrowserRouter`，未使用 RSC/Action API。npm 当前最新 `react-router-dom` 为 7.18.2，官方修复标记为尚不可用的 8.3.0；继续观察，不运行 `npm audit fix --force`。
+- 完整 `npm audit` 当前为 0；后续每次锁文件变化仍需同时检查生产依赖和开发依赖。
+- `ffmpeg-static@5.3.0` 在 Linux 实际提供 `FFmpeg 7.0.2-static`，此次依赖与 Node 隔离升级未改变该版本；仍需单独选择受维护的 FFmpeg 来源并完成音频格式回归。
 - Vite 构建仍提示主 bundle 超过默认 500 kB；环境模板中的 `NODE_ENV=production` 仍产生已知提示。
 - 生产服务器只有 1.9 GB 内存且没有 swap，直接执行 Vite 构建会耗尽资源；后续发布必须在本地或 CI 完成构建并上传已验证的 `dist/`。只有扩容或增加 swap 并重新验证后，才可调整该规则。
 - 简历首版没有 OCR、病毒扫描或自动重解析。
@@ -131,7 +141,7 @@ Prompt Injection 只能分层缓解；历史 SHA-256 密码哈希按“不改现
 1. 使用获批测试账号验证旧会话失效、重新登录、Cookie 属性和正常页面/小文件上传；不得在现有库运行 `admin:bootstrap`。
 2. 真实 AI、注册、反馈、报告创建/删除和跨账号附件测试继续单独申请数据与费用授权。
 3. 在云控制台持续确认安全组只开放 22/80/443；虽然应用已仅监听回环地址，仍建议增加网络层纵深防御。
-4. 多实例部署前迁移共享限流；未来获批时处理历史密码迁移和服务端角色绑定；持续跟踪 React Router 公告。
+4. 多实例部署前迁移共享限流；未来获批时处理历史密码迁移和服务端角色绑定；单独升级并验证 FFmpeg。
 
 ## 权威文档
 

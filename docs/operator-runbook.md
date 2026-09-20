@@ -11,7 +11,7 @@
 - 目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`
 - Eval Bar Node：`/opt/node-evalbar-current/bin/node`（当前指向独立安装的 `v22.23.2`）
-- 启动命令：PM2 使用上述解释器直接运行 `server.js`
+- 启动命令：PM2 将上述 Node 二进制作为 `script path`，以 `interpreter: none` 传入 `server.js`
 - 运行要求：Node.js ≥ 22；不得为了升级 Eval Bar 覆盖系统 `/usr/bin/node`
 
 完整部署步骤见项目根 [DEPLOYMENT.md](../DEPLOYMENT.md)。本文聚焦冒烟、数据保护和故障定位。
@@ -66,10 +66,12 @@ git rev-parse --short HEAD
 git status -sb
 /opt/node-evalbar-current/bin/node -v
 pm2 status bar-raiser-ai
-pm2 describe bar-raiser-ai | grep -E 'script path|interpreter|node.js version'
+app_pid="$(pm2 pid bar-raiser-ai)"
+readlink -f "/proc/$app_pid/exe"
+pm2 describe bar-raiser-ai | grep -E 'script path|script args|interpreter'
 ```
 
-PM2 必须为 `online`，Node 版本和 interpreter 必须来自 `/opt/node-evalbar-current`，不能回落到 `/usr/bin/node`。服务器可能因本地 Bundle 尚未推 GitHub 而显示 `main...origin/main [ahead N]`；这不是脏工作区，必须根据 GitHub 真实状态解释。
+PM2 必须为 `online`，`script path` 和 `/proc/<pid>/exe` 必须解析到 `/opt/node-evalbar-current` 对应的版本目录，`interpreter` 必须为 `none`，不能回落到 `/usr/bin/node`。服务器可能因本地 Bundle 尚未推 GitHub 而显示 `main...origin/main [ahead N]`；这不是脏工作区，必须根据 GitHub 真实状态解释。
 
 ### 4.2 HTTP 与静态资源
 

@@ -7,13 +7,25 @@
 - 项目目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - 进程管理：PM2，进程名 `bar-raiser-ai`
 - Eval Bar Node：`/opt/node-evalbar-current/bin/node`（当前指向独立安装的 `v22.23.2`）
-- 启动命令：PM2 使用上述解释器直接运行 `server.js`
+- 启动命令：PM2 将上述 Node 二进制作为 `script path`，以 `interpreter: none` 传入 `server.js`
 
 线上服务器访问 GitHub 不稳定。若 `git fetch` 或 `git pull` 卡住，使用下方“Bundle 部署路径”。
 
 生产服务器只有 1.9 GB 内存且没有 swap。不要在该主机执行 `npm run build`；所有生产发布都先在本地或 CI 完成测试与构建，再上传并原子替换 `dist/`。
 
 Eval Bar 使用 `/opt/node-evalbar-current` 下的独立 Node，不替换系统 `/usr/bin/node`。PM2 守护进程和同机其他应用继续使用各自已有的运行时。安装依赖和执行生产测试时必须把 Eval Bar 的 Node 放在 `PATH` 首位；切换版本前校验 Node 官方 SHA-256，并保留旧版本目录用于回滚。
+
+如果 PM2 进程丢失，按生产实际运行方式重建，不能用 `--interpreter` 间接启动：
+
+```bash
+cd /root/bar-raiser-ai-new/bar-raiser-ai
+pm2 start /opt/node-evalbar-current/bin/node \
+  --name bar-raiser-ai \
+  --cwd /root/bar-raiser-ai-new/bar-raiser-ai \
+  --interpreter none \
+  -- server.js
+pm2 save
+```
 
 ## 1. 本地准备发布包
 
