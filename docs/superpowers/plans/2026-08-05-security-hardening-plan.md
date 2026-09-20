@@ -1,5 +1,7 @@
 # Eval Bar AI 兼容式安全加固实施计划
 
+**执行状态（2026-08-05）：** Task 1–10 已完成、合并并部署生产；下方未勾选项保留为历史执行顺序，不代表当前未完成。最终测试、残余风险和生产验收以 [`../verification/2026-08-05-security-hardening.md`](../verification/2026-08-05-security-hardening.md) 与 [`../../handoff.md`](../../handoff.md) 为准。
+
 ## 任务清单
 
 | 任务 | 对应漏洞 | 主要工作 | 依赖关系 |

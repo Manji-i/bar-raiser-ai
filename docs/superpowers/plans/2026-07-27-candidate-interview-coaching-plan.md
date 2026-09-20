@@ -8,9 +8,9 @@
 
 **Superseded scope (2026-07-28):** Task 6 中“按最近模式进入、登录后顶部切换角色”的步骤已被后续登录角色锁定计划取代，不应再作为当前实现指引。
 
-**Architecture:** 继续使用同一个 React/Express 应用和 `/api/analyze` 接口，以 `candidate/recruiter` 模式分流。候选人简历在浏览器提取文本并检测质量，源文件由受保护的服务端附件存储保存；Candidate Prompt、报告结构和历史查询独立，旧报告默认视为 Recruiter。当前工作区有与前端目标文件重叠的未提交改动，执行时必须逐文件保留，禁止 `git add -A`。
+**Architecture:** 继续使用同一个 React/Express 应用和 `/api/analyze` 接口，以 `candidate/recruiter` 模式分流。候选人简历在浏览器提取文本并检测质量，源文件由受保护的服务端附件存储保存；Candidate Prompt、报告结构和历史查询独立，旧报告默认视为 Recruiter。
 
-**Tech Stack:** React 19、TypeScript、React Router 7、Vite、Tailwind CDN、Node.js 22 ESM、Express 5、SQLite `node:sqlite`、Multer、Google Gemini / 豆包 Ark、Node `node:test`。
+**实施时技术栈：** React 19、TypeScript、React Router 7、Vite、Tailwind CDN、Node.js 22 ESM、Express 5、SQLite `node:sqlite`、Multer、Google Gemini / 豆包 Ark、Node `node:test`。Tailwind 后续已迁入本地构建，当前技术栈以项目根 `README.md` 为准。
 
 ---
 

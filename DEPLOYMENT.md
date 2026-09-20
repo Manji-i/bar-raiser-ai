@@ -139,9 +139,15 @@ pdf_worker_path="$(find dist/assets -maxdepth 1 -name 'reportPdf.worker-*.js' -p
 curl -sS -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:3000$pdf_worker_path"
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Regular-v1.otf
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Bold-v1.otf
+curl -sSI http://127.0.0.1:3000/fonts/NotoSansSC-Regular-v1.otf \
+  | tr -d '\r' | grep -i '^Cache-Control:'
+curl -sSI "http://127.0.0.1:3000$pdf_worker_path" \
+  | tr -d '\r' | grep -i '^Cache-Control:'
+curl -sSI http://127.0.0.1:3000/ \
+  | tr -d '\r' | grep -i '^Cache-Control:'
 ```
 
-预期首页、PDF Worker 和字体为 `200`，未认证报告接口为 `401`，PM2 为 `online`。同时记录服务器 `HEAD` 与 HTML 中的主 asset hash。数据库结构检查和更完整的冒烟步骤见 `docs/operator-runbook.md`。
+预期首页、PDF Worker 和字体为 `200`，未认证报告接口为 `401`，PM2 为 `online`。版本化 Worker、主资源和两份字体应返回 `Cache-Control: public, max-age=31536000, immutable`；`index.html` 不应使用该不可变缓存头。同时记录服务器 `HEAD` 与 HTML 中的主 asset hash。数据库结构检查和更完整的冒烟步骤见 `docs/operator-runbook.md`。
 
 Node 默认只监听 `127.0.0.1:3000`。发布时还必须确认云安全组和主机防火墙没有向公网开放 `3000/tcp`；从外网访问 `evalbar.cn:3000` 和服务器 IP `:3000` 应拒绝连接或超时。
 
@@ -209,7 +215,7 @@ pm2 save
 
 应用数据存储在 `data/app.db`（SQLite，Node 内置 `node:sqlite` 驱动，见 `services/db.js`）：
 
-- `users` / `tokens` 表：用户数据和会话 token
+- `users` / `tokens` 表：用户数据、会话 Token 摘要及已失效的历史明文 Token
 - `reports` 表：评估报告
 - `report_attachments` 表：简历附件元数据、解析状态与 SHA256
 - `feedback` 表：用户反馈

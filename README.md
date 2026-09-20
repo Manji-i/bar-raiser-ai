@@ -20,7 +20,7 @@ Eval Bar AI 是一个面向面试记录分析的双模式工具：招聘方可�
 
 ## 技术栈
 
-- 前端：React、TypeScript、Vite、React Router、Tailwind CDN、lucide-react
+- 前端：React、TypeScript、Vite、React Router、构建期 Tailwind CSS、lucide-react
 - 后端：Node.js ESM、Express
 - AI 服务：DeepSeek、Google Gemini 或豆包 Ark
 - 存储：SQLite（Node 内置 `node:sqlite`），数据库文件 `data/app.db`
@@ -149,7 +149,7 @@ npm run preview  # 预览 Vite 构建结果
 
 - `.env.local`、`.env` 和任何真实密钥文件不应提交到仓库。
 - `.env.production` 当前作为生产配置模板维护；不要写入真实密钥。
-- `data/app.db` 可能包含用户密码哈希、会话 token、报告、反馈和候选人材料，仅用于本地运行和部署持久化。
+- `data/app.db` 可能包含用户密码哈希、会话 Token 摘要、已失效的历史明文 Token、报告、反馈和候选人材料，仅用于本地运行和部署持久化。
 - 用户上传的简历源文件保存在 `data/uploads/resumes/<user-id>/` 的随机文件名下，附件元数据与 SHA256 存在 SQLite；该目录不由 Express 静态托管，只能通过带权限校验的报告下载接口访问。
 - 当前角色锁定用于防止产品内误切换和历史混排，但角色仍保存在浏览器端，不能替代服务端授权；同一账号仍可手工构造另一模式的 API 请求。
 - 简历文件先在浏览器解析；提交分析后，面试文本及可用的简历文本会发送给当前配置的 AI 服务。上传简历时，源文件与解析文本会保存在服务器，删除报告会同步清理对应源文件。

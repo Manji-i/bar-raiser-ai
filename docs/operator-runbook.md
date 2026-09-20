@@ -79,9 +79,15 @@ test -n "$pdf_worker_path"
 curl -sS -o /dev/null -w 'pdf_worker=%{http_code}\n' "http://127.0.0.1:3000$pdf_worker_path"
 curl -sS -o /dev/null -w 'font_regular=%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Regular-v1.otf
 curl -sS -o /dev/null -w 'font_bold=%{http_code}\n' http://127.0.0.1:3000/fonts/NotoSansSC-Bold-v1.otf
+curl -sSI http://127.0.0.1:3000/fonts/NotoSansSC-Regular-v1.otf \
+  | tr -d '\r' | grep -i '^Cache-Control:'
+curl -sSI "http://127.0.0.1:3000$pdf_worker_path" \
+  | tr -d '\r' | grep -i '^Cache-Control:'
+curl -sSI http://127.0.0.1:3000/ \
+  | tr -d '\r' | grep -i '^Cache-Control:'
 ```
 
-预期：首页、PDF Worker 和两份字体均为 `200`，未认证报告接口为 `401`，HTML 指向本次构建的新 asset。
+预期：首页、PDF Worker 和两份字体均为 `200`，未认证报告接口为 `401`，HTML 指向本次构建的新 asset。带哈希 Worker/主资源和版本化字体应返回 `Cache-Control: public, max-age=31536000, immutable`；`index.html` 不应使用该不可变缓存头。
 
 服务器本机执行 `ss -ltnp | grep ':3000'` 时，Node 必须只监听 `127.0.0.1:3000`。外部检查 `evalbar.cn:3000` 和服务器 IP `:3000` 必须拒绝连接或超时；若返回应用页面，发布不能验收。
 
@@ -154,6 +160,10 @@ node scripts/generate-provider-comparison.mjs --execute --providers=glm,kimi
 2. 本地或 CI 的 `npm run build` 是否成功，上传压缩包的 SHA-256 是否一致。
 3. 服务器 `dist/` 是否已原子替换，HTML 中的 asset hash 是否变化。
 4. PM2 是否重启并指向当前目录。
+
+### PDF 首次导出超时
+
+若首次打开报告后导出失败，先分别检查 PDF Worker 和两份版本化字体的 HTTP 状态、传输时间与 `Cache-Control`。客户端允许字体下载、pdfmake 初始化和排版共用最多 60 秒；若字体请求超过该边界或没有长期缓存，先修复静态资源传输与缓存，不要回退到截图 PDF 或系统打印。
 
 ### 生产机误启动构建后资源耗尽
 

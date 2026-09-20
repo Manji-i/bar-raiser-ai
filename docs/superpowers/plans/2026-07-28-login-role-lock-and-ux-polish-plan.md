@@ -8,7 +8,7 @@
 
 **Architecture:** 使用 `AuthContext` 管理与认证同生命周期的客户端锁定角色，所有业务路由和页面从该上下文读取模式并失败关闭。Candidate Prompt 通过带版本标记的代码级输出契约兼容已有数据库 Prompt；外部图标替换为构建内 Lucide 图标。强化版 A 的服务端绕过风险记录在独立维护文档中。
 
-**Tech Stack:** React 19、TypeScript、React Router 7、Node.js ESM、Express、SQLite、Node Test Runner、Vite、Tailwind CDN、lucide-react
+**实施时技术栈：** React 19、TypeScript、React Router 7、Node.js ESM、Express、SQLite、Node Test Runner、Vite、Tailwind CDN、lucide-react。Tailwind 与浏览器认证随后完成安全升级，当前技术栈和认证边界以项目根 `README.md` 与 `docs/architecture.md` 为准。
 
 ---
 

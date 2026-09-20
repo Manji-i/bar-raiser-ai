@@ -86,7 +86,7 @@ flowchart LR
 
 报告页首屏完成后，`usePreparedReportPdf` 在空闲时预生成 PDF。用户点击时复用同一个 Promise 或已缓存的 Blob；Blob 已准备好时立即触发浏览器下载，不打开打印或系统存储窗口。切换报告或离开页面时会终止 Worker、撤销对象 URL 并清空缓存，失败后允许重新生成。
 
-PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和复制，也不会在图片切页处截断。`pdfmake` 只打入独立 Worker chunk，两份 Noto Sans SC 字体从 `public/fonts/` 自托管并在单次 Worker 生命周期内只加载一次。生成结果只保存在当前浏览器内存中，不上传服务端、不写入 SQLite，也不新增数据库字段。
+PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和复制，也不会在图片切页处截断。`pdfmake` 只打入独立 Worker chunk，两份 Noto Sans SC 字体从 `public/fonts/` 自托管并在单次 Worker 生命周期内只加载一次。Worker 准备和探针共用 60 秒失败上限，以覆盖真实网络下的首次字体传输；该上限不增加生成步骤。带哈希构建资源和版本化字体使用一年 `immutable` 缓存，`index.html` 保持非强缓存。生成结果只保存在当前浏览器内存中，不上传服务端、不写入 SQLite，也不新增数据库字段。
 
 前端导出模块：
 
@@ -122,7 +122,7 @@ PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和�
 | `services/analysisTelemetry.js` | 不含候选人材料的分析耗时结构化日志 |
 | `services/feedbackValidation.js` | 新反馈 Schema 和两种模式问题标签单一来源 |
 | `services/promptSecurity.js` | 不可信输入安全契约与模型输出边界 |
-| `services/httpSecurity.js` | CSP/HSTS 等响应头和 Origin 白名单 |
+| `services/httpSecurity.js` | CSP/HSTS 等响应头、Origin 白名单和版本化静态资源缓存策略 |
 
 ### 5.1 请求额度
 
@@ -138,7 +138,7 @@ PDF 使用文字排版而不是网页截图，因此文字可搜索、选择和�
 - 新 Token 只在响应端短暂出现，数据库保存 SHA-256 摘要；浏览器使用 `HttpOnly`、`SameSite=Strict` Cookie，生产 HTTPS 下同时设置 `Secure`，绝对有效期 12 小时。
 - 浏览器不在 `localStorage` 保存 Token。非浏览器集成需显式调用 `/api/auth/token`，Bearer Token 与 Cookie 使用同一过期和摘要校验。
 - 注册不会自动授予管理员；`npm run admin:bootstrap` 只允许真正空的 users 表，现有生产库不得运行。
-- 所有响应设置 CSP、HSTS、点击劫持、MIME、Referrer 和 Permissions Policy；非安全方法若携带 Origin，必须命中正式域名或本地开发白名单。
+- 所有响应设置 CSP、HSTS、点击劫持、MIME、Referrer 和 Permissions Policy；非安全方法若携带 Origin，必须命中正式域名或本地开发白名单。版本化静态资源可长期缓存，SPA 入口不得使用同样的不可变缓存策略。
 - 未知 `/api/*` 始终返回 JSON `404`，不会回退为 SPA HTML。
 
 ## 6. 数据模型

@@ -125,7 +125,7 @@ Web Worker 是性能边界，不是可选优化。实施的第一项技术验证
 
 ### `services/pdf/reportPdfClient.ts`
 
-页面侧管理器按报告身份和内容摘要缓存一个生成任务与 Blob：
+页面侧管理器按报告身份和内容摘要缓存一个生成任务与 Blob。Worker 准备与探针共用 60 秒失败上限，以覆盖真实网络的首次字体传输；该上限只决定何时报错，不增加生成步骤：
 
 - 报告正文首次稳定显示后，通过 `requestIdleCallback` 启动；不支持该 API 时使用短延迟任务，不阻塞首次 React commit。
 - 同一报告只允许一个进行中的生成任务，重复调用复用同一个 Promise。
@@ -139,7 +139,7 @@ Web Worker 是性能边界，不是可选优化。实施的第一项技术验证
 
 使用项目自托管、许可允许再分发的 Noto Sans SC 字体，不从第三方 CDN 运行时加载。字体资产固定放在 `public/fonts/`：`NotoSansSC-Regular-v1.otf`、`NotoSansSC-Bold-v1.otf` 和对应许可证文件。两个版本化字体 URL 由 Worker 注册，后续升级通过递增文件名版本避免旧缓存污染。
 
-字体只由 PDF Worker 懒加载，不进入报告首屏的同步 JavaScript。采用 Noto CJK 官方 `SubsetOTF/SC` 资源，两个字重原始体积合计约 16.9 MB；首次字体传输预算上限为 18 MB。不能通过继续删除字符来压缩体积后无提示显示方框。
+字体只由 PDF Worker 懒加载，不进入报告首屏的同步 JavaScript。采用 Noto CJK 官方 `SubsetOTF/SC` 资源，两个字重原始体积合计约 16.9 MB；首次字体传输预算上限为 18 MB。版本化字体和带哈希构建资源使用一年 `immutable` 缓存，SPA 的 `index.html` 不使用该策略。不能通过继续删除字符来压缩体积后无提示显示方框。
 
 字体加载失败时，导出失败并向用户显示可重试提示；不得生成缺字、方框或不可复制的降级文件。
 
