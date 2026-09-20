@@ -1,3 +1,4 @@
+import './runtimePermissions.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -9,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 export const DATA_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
 }
 
 const DB_FILE = path.join(DATA_DIR, 'app.db');

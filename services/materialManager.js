@@ -19,7 +19,7 @@ export const createMaterialManager = ({ store, root, asr, feishu, env = process.
     locks.add(id);
     try { return await action(); } finally { locks.delete(id); }
   };
-  const fail = (id, error, revoke = false) => store.update(id, { status: 'failed', error: { code: error.code || 'MATERIAL_FAILED', message: error.status ? error.message : '材料处理失败，请稍后重试。' }, ...(revoke ? { mediaTokenHash: null } : {}) });
+  const fail = (id, error, revoke = false, changes = {}) => store.update(id, { status: 'failed', error: { code: error.code || 'MATERIAL_FAILED', message: error.status ? error.message : '材料处理失败，请稍后重试。' }, ...(revoke ? { mediaTokenHash: null } : {}), ...changes });
   const manager = {
     async createAudio(userId, data) {
       if (!asr.isEnabled()) throw materialError('ASR_NOT_CONFIGURED', '录音转写尚未开通，请联系管理员。', 503);
@@ -42,7 +42,7 @@ export const createMaterialManager = ({ store, root, asr, feishu, env = process.
         }
         if (index !== job.chunks.length || bytes.length !== Math.min(AUDIO_CHUNK_BYTES, job.sizeBytes - job.uploadedBytes)) throw materialError('CHUNK_ORDER', '上传顺序或文件大小不正确。', 409);
         const target = path.join(directory(id), `source${validateAudioName(job.fileName)}`);
-        const file = await open(target, index === 0 ? 'w' : 'r+');
+        const file = await open(target, index === 0 ? 'w' : 'r+', 0o600);
         try {
           // A crash before metadata commit may leave an uncommitted tail; overwrite it.
           await file.truncate(job.uploadedBytes);
@@ -54,7 +54,7 @@ export const createMaterialManager = ({ store, root, asr, feishu, env = process.
           }
           await file.sync();
         } finally { await file.close(); }
-        return publicMaterial(store.update(id, { uploadedBytes: job.uploadedBytes + bytes.length, chunks: [...job.chunks, hash] }));
+        return publicMaterial(store.update(id, { uploadedBytes: job.uploadedBytes + bytes.length, chunks: [...job.chunks, hash], lastUploadAt: now() }));
       });
     },
     async submit(id, userId) {
@@ -80,6 +80,7 @@ export const createMaterialManager = ({ store, root, asr, feishu, env = process.
       const job = store.owned(id, userId);
       if (controllers.has(id) || locks.has(id)) throw materialError('MATERIAL_BUSY', '上次请求正在结束，请稍后重试。', 409);
       if (job.status !== 'failed') throw materialError('RETRY_STATE', '只有失败的任务可以重试。', 409);
+      if (job.cleanedAt || ['MATERIAL_CANCELLED', 'UPLOAD_IDLE_TIMEOUT'].includes(job.error?.code)) throw materialError('RETRY_STATE', '这次导入已经结束，请重新选择录音。', 409);
       if (job.attempts >= 3) throw materialError('RETRY_LIMIT', '已达到本次材料的重试次数，请重新导入。', 429);
       if (store.hasActive(userId)) throw materialError('MATERIAL_BUSY', '已有材料正在处理。', 409);
       store.assertQueueCapacity();
@@ -97,7 +98,7 @@ export const createMaterialManager = ({ store, root, asr, feishu, env = process.
       if (job.status === 'ready') throw materialError('MATERIAL_READY', '材料已经完成。', 409);
       controllers.get(id)?.abort();
       sessions.delete(id);
-      return publicMaterial(fail(id, materialError('MATERIAL_CANCELLED', '已放弃这次导入。已提交的语音任务可能仍产生费用。'), true));
+      return publicMaterial(fail(id, materialError('MATERIAL_CANCELLED', '已放弃这次导入。已提交的语音任务可能仍产生费用。'), true, { cleanupRequestedAt: now() }));
     },
     async tick() {
       if (ticking) return;
@@ -154,12 +155,22 @@ export const createMaterialManager = ({ store, root, asr, feishu, env = process.
       } finally { ticking = false; }
     },
     async cleanup() {
-      for (const job of store.expired()) {
+      for (const job of store.staleUploads()) {
+        fail(job.id, materialError('UPLOAD_IDLE_TIMEOUT', '上传已超过 30 分钟没有进展，请重新选择录音。'), true, { cleanupRequestedAt: now() });
+      }
+      for (const job of store.cleanupCandidates()) {
         if (controllers.has(job.id) || locks.has(job.id)) continue;
-        await rm(directory(job.id), { recursive: true, force: true });
-        sessions.delete(job.id);
-        if (!job.reportId) store.remove(job.id);
-        else store.update(job.id, { localPath: null, preparedPath: null, mediaTokenHash: null, cleanedAt: now() });
+        await withLock(job.id, async () => {
+          const current = store.internal(job.id);
+          if (!current || current.cleanedAt || (!current.cleanupRequestedAt && current.expiresAt > now())) return;
+          await rm(directory(job.id), { recursive: true, force: true });
+          sessions.delete(job.id);
+          if (current.expiresAt <= now() && !current.reportId) store.remove(job.id);
+          else store.update(job.id, { localPath: null, preparedPath: null, mediaTokenHash: null, cleanedAt: now() });
+        });
+      }
+      for (const job of store.expiredRecords()) {
+        if (!job.reportId && job.cleanedAt) store.remove(job.id);
       }
     },
     providerFile(id, key) {

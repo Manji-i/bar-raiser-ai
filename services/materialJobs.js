@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 export const MATERIAL_TTL = 24 * 60 * 60 * 1000;
+export const UPLOAD_IDLE_MS = 30 * 60 * 1000;
 export const NORMALIZED_AUDIO_RESERVATION = 116 * 1024 * 1024;
 export const materialError = (code, message, status = 400) => Object.assign(new Error(message), { code, status });
 export const initializeMaterialSchema = database => database.exec(`
@@ -52,7 +53,8 @@ export const createMaterialStore = (database, { now = Date.now } = {}) => {
       const reserved = active.reduce((sum, j) => sum + reservation(j), 0);
       if (reserved + reservation(data) > 2 * 1024 ** 3) throw materialError('MATERIAL_CAPACITY', '录音处理空间暂满，请稍后重试。', 503);
       assertQueueCapacity();
-      const job = save({ ...data, id: randomUUID(), userId, status: data.source === 'audio' ? 'uploading' : 'queued', createdAt: now(), expiresAt: now() + MATERIAL_TTL, uploadedBytes: 0, chunks: [], attempts: 0 });
+      const createdAt = now();
+      const job = save({ ...data, id: randomUUID(), userId, status: data.source === 'audio' ? 'uploading' : 'queued', createdAt, expiresAt: createdAt + MATERIAL_TTL, lastUploadAt: createdAt, uploadedBytes: 0, chunks: [], attempts: 0 });
       return publicMaterial(job);
     },
     get: (id, userId) => publicMaterial(owned(id, userId)),
@@ -79,7 +81,11 @@ export const createMaterialStore = (database, { now = Date.now } = {}) => {
       return { ...publicMaterial(job), transcript: job.confirmedTranscript };
     },
     pending: () => database.prepare("SELECT payload FROM material_jobs WHERE status IN ('queued','transcribing') AND expires_at>? ORDER BY created_at ASC").all(now()).map(decode),
-    expired: () => database.prepare('SELECT payload FROM material_jobs WHERE expires_at<=?').all(now()).map(decode).filter(j => !j.cleanedAt),
+    cleanupCandidates: () => database.prepare('SELECT payload FROM material_jobs').all().map(decode)
+      .filter(j => !j.cleanedAt && (j.cleanupRequestedAt || j.expiresAt <= now())),
+    staleUploads: () => database.prepare("SELECT payload FROM material_jobs WHERE status='uploading' AND expires_at>?").all(now()).map(decode)
+      .filter(j => !j.cleanedAt && !j.cleanupRequestedAt && now() - (j.lastUploadAt ?? j.createdAt) > UPLOAD_IDLE_MS),
+    expiredRecords: () => database.prepare('SELECT payload FROM material_jobs WHERE expires_at<=?').all(now()).map(decode),
     remove: id => database.prepare('DELETE FROM material_jobs WHERE id=?').run(id),
     forReport: reportId => database.prepare(`SELECT payload FROM material_jobs WHERE report_id=? OR EXISTS
       (SELECT 1 FROM json_each(material_jobs.payload, '$.reportIds') WHERE value=?)`).all(reportId, reportId).map(decode),

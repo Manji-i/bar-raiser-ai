@@ -78,8 +78,8 @@ export const saveResumeFile = async ({
   const storedName = `${randomUUID()}${rule.extension}`;
   const relativePath = path.join(safeUserId, storedName);
   const absolutePath = resolveStoredPath(rootDir, relativePath);
-  await mkdir(path.dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, file.buffer, { flag: 'wx' });
+  await mkdir(path.dirname(absolutePath), { recursive: true, mode: 0o700 });
+  await writeFile(absolutePath, file.buffer, { flag: 'wx', mode: 0o600 });
 
   return {
     id: randomUUID(),

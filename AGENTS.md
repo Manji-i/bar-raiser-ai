@@ -67,7 +67,7 @@
 ## 部署注意
 
 - 线上站点：`https://evalbar.cn/`；`3000` 端口仅供服务器本机 Nginx 反代，不是公网入口。
-- 线上服务当前由 `root@14.103.45.4` 的 PM2 管理，项目目录是 `/root/bar-raiser-ai-new/bar-raiser-ai`，进程名是 `bar-raiser-ai`。
+- 线上运维入口是 `evalbar-admin@14.103.45.4`，登录后使用 `sudo -i` 管理 root 名下的 PM2；项目目录是 `/root/bar-raiser-ai-new/bar-raiser-ai`，进程名是 `bar-raiser-ai`。SSH 禁止密码认证和 root 直接登录。
 - `dist/` 是构建产物，线上是否最新不能只看源码，要对比线上 HTML 引用的 asset hash。
 - 生产服务器只有 1.9 GB 内存且没有 swap，禁止在该主机执行 `npm run build`；必须在本地或 CI 完成测试与构建，校验后上传 `dist/` 并原子替换。
 - 目标服务器访问 GitHub 不稳定；如果 `git fetch`/`git pull` 卡住，优先用本机 `git bundle` 传到服务器后快进合并。
@@ -124,13 +124,15 @@
 - Recruiter 与 Candidate Prompt 分别存于 `system_prompt` 和 `candidate_system_prompt`；Candidate 首版禁止复用 Recruiter 的反馈自动迭代。
 - 文件解析在浏览器侧完成，PDF Worker 或字体配置变化要在冷缓存和真实网络下实际导出验证；版本化字体与带哈希构建资源必须保持长期 `immutable` 缓存，`index.html` 不得强缓存。
 - 简历仅允许 PDF、DOCX、TXT，最大 10 MB；浏览器解析失败仍可保存合法源文件并人工补充文本，低质量文本不得直接进入模型输入。
+- `multer` 必须精确固定为 `2.4.0` 或经过专项回归的更高安全版本；multipart 字段禁止数组索引展开，升级时必须保留恶意字段回归测试。
 - 存储已迁移到 SQLite（`node:sqlite`）。历史 JSON 文件由 `scripts/migrate-to-sqlite.mjs` 一次性导入（幂等，users 表非空则跳过），不要再写回 JSON 存储。
+- Node 进程启动后默认 `umask` 为 `0077`。`.env*`、SQLite、PM2 dump 和候选人文件应为 `0600`，运行时数据目录应为 `0700`；发布后必须以非特权账号验证不可读取。
 
 ## 录音材料约定（2026-09-17）
 
 - `services/material*.js`：材料任务、上传和转写调度；`components/RecordingImport.tsx`：双模式共享录音入口。
 - 音频临时文件只放 `data/uploads/audio/<随机任务 id>/`，不得静态托管；用户读文件必须校验所有者，供应商读取使用短时随机凭证，日志不得含凭证或逐字稿。
-- 材料任务保存在 SQLite，原始转写与确认稿分开；分析读取服务端确认稿并检查用户、模式和状态。临时音频最多保留 24 小时；关联报告后保留材料来源信息。
+- 材料任务保存在 SQLite，原始转写与确认稿分开；分析读取服务端确认稿并检查用户、模式和状态。临时音频最多保留 24 小时；上传连续 30 分钟没有成功分块即失败并清理，主动取消在在途操作结束后清理。已清理任务不能原地重试，用户需重新选择录音；关联报告后保留材料来源信息。
 - 首版不公开飞书妙记入口、授权回调和链接导入；即使存在飞书配置也不得启用。历史实现保留为后续能力，重新启用前必须重新评审跨租户发布和权限模型。
 - ASR 配置缺失时明确显示未开通；模拟测试不能代替真实录音转写验收。生产发布前必须完成真实服务联调。
 

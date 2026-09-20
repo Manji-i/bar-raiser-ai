@@ -175,6 +175,7 @@ const resumeUpload = multer({
     parts: 9,
     fieldSize: 200 * 1024,
     fileSize: 10 * 1024 * 1024,
+    fieldArrayIndexLimit: 0,
   },
 });
 

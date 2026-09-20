@@ -104,8 +104,43 @@ test('取消可停止在途任务且迟到结果不复活材料',async t=>{
   const pending=f.manager.tick();
   while(!finish) await new Promise(resolve=>setImmediate(resolve));
   f.manager.cancel(job.id,'u');
+  await f.manager.cleanup();
+  assert.equal(f.store.internal(job.id).cleanedAt, undefined);
   finish();await pending;
   assert.equal(f.store.get(job.id,'u').error.code,'MATERIAL_CANCELLED');
+  await f.manager.cleanup();
+  assert.equal(f.store.internal(job.id).cleanedAt, 100000);
+});
+
+test('取消任务清理文件并释放空间预留，但保留每日创建次数', async t => {
+  const f = await fixture(t);
+  for (const sizeMiB of [500, 500, 500, 50]) {
+    const job = await f.manager.createAudio('u', { analysisMode: 'candidate', fileName: 'a.wav', sizeBytes: sizeMiB * 1024 ** 2 });
+    f.manager.cancel(job.id, 'u');
+    await f.manager.cleanup();
+    assert.equal(f.store.internal(job.id).cleanedAt, 100000);
+    assert.throws(() => f.manager.retry(job.id, 'u', 'session'), error => error.code === 'RETRY_STATE');
+  }
+
+  const other = await f.manager.createAudio('other', { analysisMode: 'candidate', fileName: 'tiny.wav', sizeBytes: 1 });
+  assert.equal(other.status, 'uploading');
+  assert.equal(f.store.list('u', 'candidate').length, 4);
+});
+
+test('上传空闲超过三十分钟后终止并清理，成功新分块会刷新活动时间', async t => {
+  const f = await fixture(t);
+  const stale = await f.manager.createAudio('stale', { analysisMode: 'candidate', fileName: 'a.wav', sizeBytes: 3 });
+  f.advance(30 * 60 * 1000 + 1);
+  await f.manager.cleanup();
+  assert.equal(f.store.internal(stale.id).error.code, 'UPLOAD_IDLE_TIMEOUT');
+  assert.equal(f.store.internal(stale.id).cleanedAt, 1900001);
+
+  const active = await f.manager.createAudio('active', { analysisMode: 'candidate', fileName: 'b.wav', sizeBytes: 3 });
+  f.advance(29 * 60 * 1000);
+  await f.manager.chunk(active.id, 'active', 0, Buffer.from('abc'));
+  f.advance(2 * 60 * 1000);
+  await f.manager.cleanup();
+  assert.equal(f.store.internal(active.id).status, 'uploading');
 });
 test('过期清理仅作用于材料随机目录，链接导入重启需重新授权',async t=>{
   const f=await fixture(t);

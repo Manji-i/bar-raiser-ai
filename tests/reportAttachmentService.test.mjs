@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -55,6 +55,8 @@ test('源文件使用随机安全路径保存、计算 SHA256 并可删除', asy
 
   const absolutePath = resolveStoredPath(rootDir, saved.relativePath);
   assert.deepEqual(await readFile(absolutePath), file.buffer);
+  assert.equal((await stat(path.dirname(absolutePath))).mode & 0o777, 0o700);
+  assert.equal((await stat(absolutePath)).mode & 0o777, 0o600);
   assert.throws(() => resolveStoredPath(rootDir, '../outside.pdf'), /Unsafe attachment path/);
 
   assert.equal(await deleteAttachmentFile(rootDir, saved.relativePath), true);

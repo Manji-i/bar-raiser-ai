@@ -7,13 +7,15 @@
 ## 1. 生产事实
 
 - 线上地址：`https://evalbar.cn/`
-- 主机：`root@14.103.45.4`
+- 运维入口：`evalbar-admin@14.103.45.4`，仅允许公钥登录；管理项目和 root PM2 前执行 `sudo -i`
 - 目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`
 - 启动命令：`npm start`
 - 运行要求：Node.js ≥ 22
 
 完整部署步骤见项目根 [DEPLOYMENT.md](../DEPLOYMENT.md)。本文聚焦冒烟、数据保护和故障定位。
+
+生产 SSH 禁止密码认证和 root 直接登录。修改 SSH 配置时必须先用新的 `evalbar-admin` 会话验证 `sudo -n true`，再运行 `sshd -t` 和 reload；reload 后另开会话复验，不能依赖已有连接。
 
 ## 2. 发布前检查
 
@@ -50,6 +52,8 @@ chmod -R go-rwx "$deploy_backup_dir"
 ```
 
 备份目录应为 root-only，不进入 Web 目录或 Git。恢复属于数据覆盖操作，必须单独确认后执行。
+
+生产应用在 `0077` umask 下运行。每次发布后检查 `.env*`、`data/app.db*`、`data/uploads/` 和 `/root/.pm2/dump.pm2`：文件只允许所有者读写（`0600`），目录只允许所有者进入（`0700`）。同时以 `www-data` 执行只读探测，以上内容必须返回拒绝访问。
 
 ## 4. 发布后冒烟
 

@@ -3,7 +3,7 @@
 ## 线上现状
 
 - 线上地址：`https://evalbar.cn/`
-- 服务器：`root@14.103.45.4`
+- 运维入口：`evalbar-admin@14.103.45.4`（仅公钥；登录后执行 `sudo -i`）
 - 项目目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - 进程管理：PM2，进程名 `bar-raiser-ai`
 - 启动命令：`npm start`
@@ -38,7 +38,7 @@ shasum -a 256 "$deploy_artifact_dir/bar-raiser-ai-dist.tgz" \
 
 ```bash
 scp -O "$deploy_artifact_dir/bar-raiser-ai-dist.tgz" \
-  root@14.103.45.4:/tmp/bar-raiser-ai-dist.tgz
+  evalbar-admin@14.103.45.4:/tmp/bar-raiser-ai-dist.tgz
 ```
 
 若大文件传输连接被关闭，切成 1 MiB 分片逐个传输，服务器重组后再校验 SHA-256：
@@ -47,9 +47,9 @@ scp -O "$deploy_artifact_dir/bar-raiser-ai-dist.tgz" \
 split -b 1m "$deploy_artifact_dir/bar-raiser-ai-dist.tgz" \
   "$deploy_artifact_dir/bar-raiser-ai-dist.part-"
 for chunk in "$deploy_artifact_dir"/bar-raiser-ai-dist.part-*; do
-  scp -O "$chunk" root@14.103.45.4:/tmp/ || exit 1
+  scp -O "$chunk" evalbar-admin@14.103.45.4:/tmp/ || exit 1
 done
-ssh root@14.103.45.4 'cat /tmp/bar-raiser-ai-dist.part-* > /tmp/bar-raiser-ai-dist.tgz'
+ssh evalbar-admin@14.103.45.4 'cat /tmp/bar-raiser-ai-dist.part-* > /tmp/bar-raiser-ai-dist.tgz'
 ```
 
 ## 2. 同步代码
@@ -59,7 +59,8 @@ ssh root@14.103.45.4 'cat /tmp/bar-raiser-ai-dist.part-* > /tmp/bar-raiser-ai-di
 适用于服务器能正常访问 GitHub 的情况：
 
 ```bash
-ssh root@14.103.45.4
+ssh evalbar-admin@14.103.45.4
+sudo -i
 cd /root/bar-raiser-ai-new/bar-raiser-ai
 umask 077
 mkdir -p /root/bar-raiser-ai-backups
@@ -78,13 +79,14 @@ npm test
 
 ```bash
 scp -O "$deploy_artifact_dir/bar-raiser-ai-main.bundle" \
-  root@14.103.45.4:/tmp/bar-raiser-ai-main.bundle
+  evalbar-admin@14.103.45.4:/tmp/bar-raiser-ai-main.bundle
 ```
 
 服务器合并前先备份完整 `data/`，再快进代码：
 
 ```bash
-ssh root@14.103.45.4
+ssh evalbar-admin@14.103.45.4
+sudo -i
 cd /root/bar-raiser-ai-new/bar-raiser-ai
 umask 077
 mkdir -p /root/bar-raiser-ai-backups

@@ -15,6 +15,8 @@ const statusLabels: Record<MaterialJob['status'], string> = {
   uploading: '正在上传', queued: '已进入后台处理队列', transcribing: '正在生成逐字稿', ready: '逐字稿已就绪，请检查确认', failed: '处理未完成',
 };
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : '请求失败，请稍后重试。';
+const canRetry = (job: MaterialJob) => job.status === 'failed'
+  && !['MATERIAL_CANCELLED', 'UPLOAD_IDLE_TIMEOUT'].includes(job.error?.code || '');
 
 const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidated }) => {
   const [capabilities, setCapabilities] = useState<MaterialCapabilities | null>(null);
@@ -111,7 +113,7 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
     <div className="space-y-5">
       <div className="flex items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
         <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5 text-brand-600" />
-        <p>请确认你有权处理这段面试材料。录音会送至语音转写服务，逐字稿在确认后用于 AI 分析；临时音频最多保留 24 小时。当前功能只分析回答文字。</p>
+        <p>请确认你有权处理这段面试材料。录音会送至语音转写服务，逐字稿在确认后用于 AI 分析；临时音频最多保留 24 小时，上传 30 分钟没有新分块完成会自动结束。当前功能只分析回答文字。</p>
       </div>
       {initializing && <p className="flex items-center gap-2 text-slate-600"><Loader2 className="w-5 h-5 animate-spin" /> 正在检查服务和恢复任务…</p>}
       {!initializing && !capabilities && <Button type="button" variant="secondary" onClick={() => void run(async signal => setCapabilities(await materialClient.capabilities(signal)))} disabled={busy}>重新检查服务</Button>}
@@ -131,7 +133,7 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
           {restored && <p className="text-sm text-slate-500">已恢复最近的任务。检查并点击“保存确认稿并用于分析”后，才会更新当前表单。</p>}
           {job.status === 'uploading' && <div className="space-y-2"><progress className="w-full accent-indigo-500" value={uploadedBytes} max={job.sizeBytes} aria-label="音频上传进度" /><p className="text-sm text-slate-600">已上传 {Math.round(uploadedBytes / Math.max(job.sizeBytes, 1) * 100)}%{!busy && '。上传尚未完成，请放弃后重新选择文件。'}</p></div>}
           {processing && <p className="flex items-center gap-2 text-sm text-slate-600"><Loader2 className="w-4 h-4 animate-spin" /> 后台会继续处理，你可以稍后回来查看。</p>}
-          {job.status === 'failed' && <div className="space-y-3"><p className="text-sm text-red-600">{job.error?.message || '材料处理失败，请重试或使用文字输入。'}</p><Button type="button" variant="secondary" disabled={busy} onClick={() => void run(async signal => { onInvalidated(); receiveJob(await materialClient.retry(job.id, signal)); })}><RefreshCw className="w-4 h-4" /> 重试任务</Button></div>}
+          {job.status === 'failed' && <div className="space-y-3"><p className="text-sm text-red-600">{job.error?.message || '材料处理失败，请重试或使用文字输入。'}</p>{canRetry(job) ? <Button type="button" variant="secondary" disabled={busy} onClick={() => void run(async signal => { onInvalidated(); receiveJob(await materialClient.retry(job.id, signal)); })}><RefreshCw className="w-4 h-4" /> 重试任务</Button> : <p className="text-sm text-slate-600">请选择录音重新上传。</p>}</div>}
           {job.status === 'ready' && <>
             {job.source === 'audio' && <div><label className="block text-sm text-slate-600 mb-2">试听并核对说话人</label><audio controls preload="none" src={`/api/materials/${encodeURIComponent(job.id)}/audio`} className="w-full" onError={() => setError('音频暂时无法试听，可能已超过保存时限。你仍可检查文字，或重新上传。')} /></div>}
             {speakers.length > 0 && <div className="space-y-3"><h4 className="font-semibold text-slate-900">确认说话人角色</h4><p className="text-sm text-slate-600">说话人编号不代表身份。无法确认时保留“身份待确认”。</p><div className="grid sm:grid-cols-2 gap-3">{speakers.map(speaker => <label key={speaker} className="flex flex-col gap-2 text-sm text-slate-700"><span className="break-all">{speaker}</span><select aria-label={`${speaker}的角色`} value={roles[speaker] || 'unknown'} disabled={busy} onChange={event => { const role = event.target.value as SpeakerRole; setDraft(previous => updateDraftRole(previous, speaker, roles[speaker] || 'unknown', role)); setRoles(previous => ({ ...previous, [speaker]: role })); invalidate(); }} className="rounded-lg border border-slate-300 bg-white p-3 text-base focus:ring-2 focus:ring-brand-200"> <option value="unknown">身份待确认</option><option value="candidate">候选人</option><option value="interviewer">面试官</option></select></label>)}</div><p className="text-sm text-amber-700">下面的按钮会按原始片段重新生成时间戳和角色标签，替换编辑稿中的手工修订。改变角色选择会同步对应行的身份标签，并保留手工修订的正文。若你手动删除了标签，请自行核对身份。</p><Button type="button" variant="secondary" disabled={busy} onClick={() => { setDraft(formatRoleTranscript(job.segments, roles)); invalidate(); }}>按角色重新生成编辑稿</Button></div>}
