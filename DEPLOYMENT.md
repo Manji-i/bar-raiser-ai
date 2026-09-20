@@ -6,11 +6,14 @@
 - 运维入口：`evalbar-admin@14.103.45.4`（仅公钥；登录后执行 `sudo -i`）
 - 项目目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - 进程管理：PM2，进程名 `bar-raiser-ai`
-- 启动命令：`npm start`
+- Eval Bar Node：`/opt/node-evalbar-current/bin/node`（当前指向独立安装的 `v22.23.2`）
+- 启动命令：PM2 使用上述解释器直接运行 `server.js`
 
 线上服务器访问 GitHub 不稳定。若 `git fetch` 或 `git pull` 卡住，使用下方“Bundle 部署路径”。
 
 生产服务器只有 1.9 GB 内存且没有 swap。不要在该主机执行 `npm run build`；所有生产发布都先在本地或 CI 完成测试与构建，再上传并原子替换 `dist/`。
+
+Eval Bar 使用 `/opt/node-evalbar-current` 下的独立 Node，不替换系统 `/usr/bin/node`。PM2 守护进程和同机其他应用继续使用各自已有的运行时。安装依赖和执行生产测试时必须把 Eval Bar 的 Node 放在 `PATH` 首位；切换版本前校验 Node 官方 SHA-256，并保留旧版本目录用于回滚。
 
 ## 1. 本地准备发布包
 
@@ -69,8 +72,9 @@ cp -a data "$deploy_backup_dir"
 chmod -R go-rwx "$deploy_backup_dir"
 git fetch origin
 git pull --ff-only origin main
-npm ci
-npm test
+evalbar_node_dir=/opt/node-evalbar-current/bin
+PATH="$evalbar_node_dir:$PATH" npm ci
+PATH="$evalbar_node_dir:$PATH" npm test
 ```
 
 ### Bundle 路径
@@ -96,8 +100,9 @@ chmod -R go-rwx "$deploy_backup_dir"
 git bundle verify /tmp/bar-raiser-ai-main.bundle
 git fetch /tmp/bar-raiser-ai-main.bundle main
 git merge --ff-only FETCH_HEAD
-npm ci
-npm test
+evalbar_node_dir=/opt/node-evalbar-current/bin
+PATH="$evalbar_node_dir:$PATH" npm ci
+PATH="$evalbar_node_dir:$PATH" npm test
 ```
 
 只有 GitHub 的 `origin/main` 已经真实推送到同一个提交时，才能更新服务器的 `refs/remotes/origin/main`。如果 Bundle 来自尚未推送的本地 `main`，服务器显示 `main...origin/main [ahead N]` 是正确状态，不要伪造远端引用。
