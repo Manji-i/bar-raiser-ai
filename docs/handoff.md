@@ -1,18 +1,27 @@
 # Eval Bar AI 当前交接状态
 
+## 2026-09-20 已发布：优先安全加固
+
+- 文件权限：生产 Node 实际进程使用 `0077` umask，项目私有目录和敏感文件已分别收紧为 `0700`、`0600`；`www-data` 回读验证被拒绝。
+- SSH：运维入口改为 `evalbar-admin@14.103.45.4`，仅允许公钥登录；密码认证和 root 直接登录已关闭，新账号与 `sudo` 已在 reload 后复验。
+- 上传解析：Multer 精确升级到 `2.4.0`，multipart 数组索引展开关闭并加入真实 HTTP 恶意字段回归。
+- 录音占位：主动取消在在途操作结束后清理；上传 30 分钟无成功分块会失败并清理。两者释放全站磁盘容量预留，但保留每日创建次数且不可原地重试。
+- 核心修复提交为 `d0e0052a2edd6b3a06f4729a2dd9aa6f00b00c51`；本地 180 项测试和生产构建通过，线上首页资源为 `/assets/index-CaJa9-5-.js`、`/assets/index-Ba3jjskP.css`。
+- 发布前备份：`/root/bar-raiser-ai-backups/security-before-20260920-104946`。完整证据与剩余风险见[优先安全加固验收记录](superpowers/verification/2026-09-20-priority-security-remediation.md)。
+
 ## 录音上传迭代
 
 录音代码已实现，支持所有已登录用户私有分块上传、逐字稿修订、角色确认和双模式分析。飞书妙记入口与接口首版关闭。真实 ASR 配置及上线状态见 [验收记录](audio-minutes-verification.md)；不得将模拟测试表述为已上线。
 
 ## 当前部署检查点
 
-截至 2026-08-05，生产 Provider 已切回豆包 Seed 2.1 Pro，并上线流式接收修复；相关提交尚未推送 GitHub。生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
+截至 2026-09-20，生产代码和 GitHub `main` 已同步；生产服务器仍为 1.9 GB 且无 swap，后续继续禁止在生产机构建。
 
 - 线上地址：`https://evalbar.cn/`；Node 的 `127.0.0.1:3000` 仅供本机 Nginx 反代。
 - 生产目录：`/root/bar-raiser-ai-new/bar-raiser-ai`
 - PM2 进程：`bar-raiser-ai`，状态 `online`
-- 当前生产代码：`b361946104035f4b6abc31f68560984d081a0f8d`
-- 当前首页资源：`/assets/index-CH85fL1J.js`、`/assets/index-DZT1nRDZ.css`
+- 当前生产核心代码：`d0e0052a2edd6b3a06f4729a2dd9aa6f00b00c51`
+- 当前首页资源：`/assets/index-CaJa9-5-.js`、`/assets/index-Ba3jjskP.css`
 - 2026-08-05 DeepSeek 发布前数据备份：`/root/bar-raiser-ai-backups/data-before-20260805-185421`
 - 2026-08-05 DeepSeek 发布前环境配置备份：`/root/bar-raiser-ai-backups/env-local-before-20260805-185421`
 - 2026-08-05 DeepSeek 发布前 Nginx 配置备份：`/root/bar-raiser-ai-backups/evalbar-nginx-before-20260805-185421`
