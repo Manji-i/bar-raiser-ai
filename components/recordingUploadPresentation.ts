@@ -10,9 +10,14 @@ export function getRecordingUploadPresentation({
   busy,
 }: RecordingUploadPresentationInput) {
   return {
+    canReplace: hasFile && !busy,
     canSubmit: hasFile && consent && !busy,
     step: hasFile ? 'selected' as const : 'empty' as const,
   };
+}
+
+export function shouldOpenRecordingPicker(key: string) {
+  return key === 'Enter' || key === ' ';
 }
 
 export function formatRecordingFileSize(bytes: number) {

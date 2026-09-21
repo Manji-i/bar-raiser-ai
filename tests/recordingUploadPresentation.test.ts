@@ -3,28 +3,35 @@ import test from 'node:test';
 import {
   formatRecordingFileSize,
   getRecordingUploadPresentation,
+  shouldOpenRecordingPicker,
 } from '../components/recordingUploadPresentation.ts';
 
 test('选择文件后仍需授权才允许主动上传', () => {
   assert.deepEqual(
     getRecordingUploadPresentation({ hasFile: true, consent: false, busy: false }),
-    { canSubmit: false, step: 'selected' },
+    { canReplace: true, canSubmit: false, step: 'selected' },
   );
   assert.deepEqual(
     getRecordingUploadPresentation({ hasFile: true, consent: true, busy: false }),
-    { canSubmit: true, step: 'selected' },
+    { canReplace: true, canSubmit: true, step: 'selected' },
   );
 });
 
 test('无文件或正在处理时不能提交', () => {
   assert.deepEqual(
     getRecordingUploadPresentation({ hasFile: false, consent: true, busy: false }),
-    { canSubmit: false, step: 'empty' },
+    { canReplace: false, canSubmit: false, step: 'empty' },
   );
-  assert.equal(
-    getRecordingUploadPresentation({ hasFile: true, consent: true, busy: true }).canSubmit,
-    false,
+  assert.deepEqual(
+    getRecordingUploadPresentation({ hasFile: true, consent: true, busy: true }),
+    { canReplace: false, canSubmit: false, step: 'selected' },
   );
+});
+
+test('文件选择区支持标准键盘触发键', () => {
+  assert.equal(shouldOpenRecordingPicker('Enter'), true);
+  assert.equal(shouldOpenRecordingPicker(' '), true);
+  assert.equal(shouldOpenRecordingPicker('Escape'), false);
 });
 
 test('文件大小使用易读单位且不夸大精度', () => {

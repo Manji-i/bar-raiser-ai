@@ -10,7 +10,7 @@
 - Source pixels: 1536 × 1024
 - Desktop screenshots: 1440 × 1153 and 1440 × 1106; CSS viewport 1440 × 1000; deviceScaleFactor 1
 - Mobile screenshot: CSS viewport 390 × 844; deviceScaleFactor 1; document scrollWidth 390
-- States: initial upload, selected file before upload, consent disabled/enabled
+- States: initial upload, selected file before upload, consent disabled/enabled, queued, transcribing, transcript ready
 
 ## Full-view comparison
 
@@ -32,8 +32,12 @@
 
 - 文件选择不会触发上传；选择后主按钮保持禁用。
 - 勾选授权后“上传并转写”启用；本次视觉验收未点击该按钮，避免调用真实 ASR。
+- 上传动作进入忙碌态后，“更换”文件、隐藏文件输入和授权复选框都会锁定；纯函数测试同时覆盖提交与更换按钮的禁用规则。
+- 拖拽区本身使用 `role="button"` 与 `tabIndex="0"`，浏览器实测 Enter 可触发文件选择；隐藏文件输入不进入 Tab 顺序。
 - 文件输入、复选框、上传进度和三步状态均有可访问名称或语义。
-- 浏览器控制台 error/warning 数量为 0。
+- 使用本地合成任务分别验证“已进入后台处理队列”“正在生成逐字稿”“逐字稿已就绪，请检查确认”；就绪态包含说话人角色、可编辑逐字稿和可用的“确认并填入面试记录”按钮。
+- 合成任务直接写入本地测试数据库，未提交录音、未调用真实 ASR、未产生第三方费用。
+- 在新建的干净浏览器标签页中复查，控制台 error/warning 数量为 0。
 - 390px 视口 document scrollWidth 等于 innerWidth，未出现横向溢出。
 
 ## Findings
@@ -46,12 +50,17 @@ P3：移动端为了避免文字拥挤，三步指示只显示数字；桌面端
 
 - Pass 1: 对照参考图检查桌面初始和已选文件状态，发现标题图标容器偏小；将 `IconTile` 修正为 40 × 40px。
 - Pass 2: 修正后复查标题层级，并将视口固定为 390 × 844，确认无横向溢出、主操作完整可见，没有剩余 P0/P1/P2 问题。
+- Pass 3: 代码审查发现上传任务创建期间仍能更换文件、拖拽区不能直接通过键盘触发；补充交互锁定、Enter/Space 键盘处理和对应单测。
+- Pass 4: 使用本地合成任务逐项验证排队、转写和确认文字状态，并在干净标签页确认控制台无错误或警告。
 
 ## Implementation checklist
 
 - [x] 初始拖拽状态
 - [x] 已选择文件状态
 - [x] 授权前后主按钮状态
+- [x] 上传忙碌时锁定更换与授权操作
+- [x] 排队、转写和确认文字状态
+- [x] 键盘触发文件选择
 - [x] 桌面与移动响应式
 - [x] 浏览器控制台检查
 

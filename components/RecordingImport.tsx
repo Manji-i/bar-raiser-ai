@@ -29,6 +29,7 @@ import type {
 import {
   formatRecordingFileSize,
   getRecordingUploadPresentation,
+  shouldOpenRecordingPicker,
 } from './recordingUploadPresentation';
 
 interface Props {
@@ -192,6 +193,7 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
   }
 
   function chooseFile(file: File) {
+    if (busy) return;
     const validation = validateAudioFile(file);
     if (validation) { setError(validation); return; }
     setSelectedFile(file);
@@ -262,6 +264,15 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
             presentation.step === 'empty' ? (
               <>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label="选择面试录音"
+                  onClick={() => fileInput.current?.click()}
+                  onKeyDown={event => {
+                    if (!shouldOpenRecordingPicker(event.key)) return;
+                    event.preventDefault();
+                    fileInput.current?.click();
+                  }}
                   onDragEnter={event => { event.preventDefault(); setDragActive(true); }}
                   onDragOver={event => { event.preventDefault(); setDragActive(true); }}
                   onDragLeave={event => { event.preventDefault(); if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragActive(false); }}
@@ -271,30 +282,31 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
                     const file = event.dataTransfer.files?.[0];
                     if (file) chooseFile(file);
                   }}
-                  className={`rounded-xl border-2 border-dashed px-5 py-9 text-center transition-colors ${dragActive ? 'border-brand-500 bg-brand-50' : 'border-brand-200 bg-brand-50/40 hover:border-brand-400 hover:bg-brand-50/70'}`}
+                  className={`cursor-pointer rounded-xl border-2 border-dashed px-5 py-9 text-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 ${dragActive ? 'border-brand-500 bg-brand-50' : 'border-brand-200 bg-brand-50/40 hover:border-brand-400 hover:bg-brand-50/70'}`}
                 >
                   <UploadCloud className="mx-auto h-9 w-9 text-brand-500" />
                   <p className="mt-4 font-semibold text-slate-900">拖拽录音到这里</p>
                   <p className="mt-1 text-sm text-slate-500">或从设备中选择文件</p>
-                  <Button type="button" className="mt-5" onClick={() => fileInput.current?.click()}>
+                  <span className="mt-5 inline-flex min-h-10 items-center justify-center rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/20">
                     选择录音
-                  </Button>
-                  <input
-                    ref={fileInput}
-                    type="file"
-                    accept=".mp3,.m4a,.wav,.ogg"
-                    className="sr-only"
-                    aria-label="选择面试录音"
-                    onChange={event => {
-                      const file = event.target.files?.[0];
-                      event.target.value = '';
-                      if (file) chooseFile(file);
-                    }}
-                  />
+                  </span>
                   <p className="mt-5 text-xs leading-5 text-slate-500">
                     MP3 / M4A / WAV / OGG<br />最大 {maxMegabytes} MB · 最长 {maxMinutes} 分钟
                   </p>
                 </div>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept=".mp3,.m4a,.wav,.ogg"
+                  className="hidden"
+                  tabIndex={-1}
+                  aria-label="选择面试录音"
+                  onChange={event => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) chooseFile(file);
+                  }}
+                />
                 <ProcessingDetails />
                 <p className="border-t border-slate-100 pt-4 text-center text-xs text-slate-500">也可以使用文字文件或粘贴文本</p>
               </>
@@ -310,7 +322,8 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
                   </div>
                   <button
                     type="button"
-                    className="rounded-lg px-2 py-1 text-sm font-medium text-brand-600 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200"
+                    disabled={!presentation.canReplace}
+                    className="rounded-lg px-2 py-1 text-sm font-medium text-brand-600 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent"
                     onClick={() => fileInput.current?.click()}
                   >
                     更换
@@ -319,7 +332,9 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
                     ref={fileInput}
                     type="file"
                     accept=".mp3,.m4a,.wav,.ogg"
-                    className="sr-only"
+                    className="hidden"
+                    tabIndex={-1}
+                    disabled={!presentation.canReplace}
                     aria-label="更换面试录音"
                     onChange={event => {
                       const file = event.target.files?.[0];
@@ -333,8 +348,9 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
                   <input
                     type="checkbox"
                     checked={consent}
+                    disabled={busy}
                     onChange={event => setConsent(event.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-slate-300 accent-indigo-500"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 accent-indigo-500 disabled:cursor-not-allowed"
                   />
                   <span>我有权使用此材料，并同意上述处理方式。</span>
                 </label>
@@ -345,7 +361,8 @@ const RecordingImportSession: React.FC<Props> = ({ mode, onImported, onInvalidat
                   disabled={!presentation.canSubmit}
                   onClick={() => selectedFile && upload(selectedFile)}
                 >
-                  上传并转写 <ArrowRight className="h-4 w-4" />
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                  {busy ? '正在创建上传任务…' : '上传并转写'}
                 </Button>
                 <p className="text-center text-xs text-slate-500">点击后开始上传，转写完成后可检查和修改文字</p>
                 <p className="border-t border-slate-100 pt-4 text-center text-xs text-slate-500">当前仅分析回答文字</p>
